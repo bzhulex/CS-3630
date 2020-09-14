@@ -16,6 +16,22 @@ try:
 except ImportError:
     sys.exit("Cannot import from PIL: Do `pip3 install --user Pillow` to install")
 
+def defuse(robot: cozmo.robot.Robot):
+    # Move lift down and tilt the head up
+    robot.move_lift(-3)
+    robot.set_head_angle(degrees(0)).wait_for_completed()
+
+    # look around and try to find a cube
+    look_around = robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
+    cubes = robot.world.wait_until_observe_num_objects(num=1, object_type=cozmo.objects.LightCube, timeout=60)
+    look_around.stop()
+
+    if len(cubes) == 1:
+        action = robot.pickup_object(cubes[0], num_retries=3)
+        action.wait_for_completed()
+        print("Completed action: result = %s" % action)
+        print("Done.")
+
 def surveillance(robot: cozmo.robot.Robot):
     for i in range(4):
         robot.drive_straight(distance_mm(150), speed_mmps(50)).wait_for_completed()
@@ -24,7 +40,6 @@ def surveillance(robot: cozmo.robot.Robot):
 def fsm(robot: cozmo.robot.Robot):
     img_clf = imgclassification_sol.ImageClassifier()
     (train_raw, train_labels) = img_clf.load_data_from_folder('./train/')
-    (test_raw, test_labels) = img_clf.load_data_from_folder('./test/')
 
     # convert images into features
     print("before loop ", type(train_raw))
@@ -32,7 +47,6 @@ def fsm(robot: cozmo.robot.Robot):
     s_row, s_col = train_raw[0].shape[:2]
     print(s_row, " ", s_col)
     train_data = img_clf.extract_image_features(train_raw)
-    #test_data = img_clf.extract_image_features(test_raw)
 
     img_clf.train_classifier(train_data, train_labels)
 
@@ -54,13 +68,16 @@ def fsm(robot: cozmo.robot.Robot):
         arr = []
         arr.append(pil_image)
         pil_image = np.array(arr)
-        print("in loop ", type(pil_image))
-        print("loaded img shape ", pil_image.shape)
         features = img_clf.extract_image_features(pil_image)
 
         predicted_label = img_clf.predict_labels(features)
 
-        robot.say_text(predicted_label[0]).wait_for_completed()
+        if(predicted_label != 'none'):
+            robot.say_text(predicted_label[0]).wait_for_completed()
+            if(predicted_label == 'order'):
+                defuse(robot)
+
+        time.sleep(2)
         print(predicted_label)
 def main():
     cozmo.run_program(fsm)
