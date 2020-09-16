@@ -110,7 +110,7 @@ def burn_notice(robot: cozmo.robot.Robot):
     for i in range(4):
         drive_side()
 
-    robot.move_lift(0)
+    robot.set_lift_height(0, max_speed=-1).wait_for_completed()
 
 
 def fsm(robot: cozmo.robot.Robot):
