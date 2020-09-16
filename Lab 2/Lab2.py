@@ -8,6 +8,7 @@ from itertools import chain
 import sys
 import datetime
 import time
+
 import imgclassification_sol
 from PIL import Image
 import joblib
@@ -17,6 +18,7 @@ try:
     from PIL import Image, ImageDraw
 except ImportError:
     sys.exit("Cannot import from PIL: Do `pip3 install --user Pillow` to install")
+
 
 def defuse(robot: cozmo.robot.Robot):
     # Move lift down and tilt the head up
@@ -68,10 +70,10 @@ def heights(robot: cozmo.robot.Robot):
 
     (Not yet tested)
     '''
-    robot.drive_wheels(50,60,duration=1) # drive in straight-ish line to the left
-    robot.drive_wheels(30,60,duration=1) # drive in curved arc to the left
-    robot.drive_wheels(60,50,duration=3) # drive in straight-ish line to the right
-    robot.drive_wheels(60,30,duration=1)  # drive in curved arc to the right
+    robot.drive_wheels(50,60,duration=2) # drive in straight-ish line to the left
+    robot.drive_wheels(30,60,duration=7) # drive in curved arc to the left
+    robot.drive_wheels(60,50,duration=2) # drive in straight-ish line to the right
+    robot.drive_wheels(70,30,duration=5)  # drive in curved arc to the right
     robot.stop_all_motors()
     robot.play_anim_trigger(
         cozmo.anim.Triggers.CodeLabWin).wait_for_completed()  # play animation
@@ -80,19 +82,35 @@ def burn_notice(robot: cozmo.robot.Robot):
     '''
     Drive in a square (20cm x 20cm), slowly/continuously lower and raise the lift (2s),
     and state "I am not a spy". At end, lower the lift and return to idle state.
-
-    (Not yet tested, also add animation)
     '''
+
+    def drive_and_lift():
+        elapsed = 0
+        speed = 30 # 1 cm/sec
+        max_time = 200/speed # can only go 20 cm
+        start_time = time.time()
+        text = '''
+        I am not a spy.
+        '''
+        while elapsed < max_time: 
+            robot.drive_wheels(speed,speed)
+            robot.set_lift_height(1,max_speed=0.5, in_parallel=True).wait_for_completed()
+            robot.say_text(text).wait_for_completed()
+            robot.set_lift_height(0, max_speed=-0.5, in_parallel=True).wait_for_completed()
+            elapsed = time.time() - start_time
+        
+        robot.stop_all_motors()
+
     def drive_side():
-        robot.move_lift(1.78)
-        robot.drive_straight(distance_mm(200), speed_mmps(50), in_parallel=True).wait_for_completed()
+        drive_and_lift()
+        time.sleep(1)
         robot.turn_in_place(degrees(90)).wait_for_completed()
         return
 
     for i in range(4):
         drive_side()
 
-    robot.LiftPosition(ratio = 0)
+    robot.move_lift(0)
 
 
 def fsm(robot: cozmo.robot.Robot):
