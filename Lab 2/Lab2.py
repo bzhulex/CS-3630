@@ -2,7 +2,7 @@ import asyncio
 import concurrent
 import numpy as np
 import cozmo
-from cozmo.util import degrees, distance_mm, speed_mmps
+from cozmo.util import degrees, distance_mm, speed_mmps, distance_inches
 import time
 from itertools import chain
 import sys
@@ -10,6 +10,8 @@ import datetime
 import time
 import imgclassification_sol
 from PIL import Image
+import joblib
+
 
 try:
     from PIL import Image, ImageDraw
@@ -23,11 +25,33 @@ def defuse(robot: cozmo.robot.Robot):
 
     # look around and try to find a cube
     look_around = robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace)
-    cubes = robot.world.wait_until_observe_num_objects(num=1, object_type=cozmo.objects.LightCube, timeout=60)
-    look_around.stop()
+    try:
+        cube = robot.world.wait_for_observed_light_cube(timeout=30)
+        print("Found cube: %s" % cube)
+    except asyncio.TimeoutError:
+        print("Didn't find a cube")
+    finally:
+        # whether we find it or not, we want to stop the behavior
+        look_around.stop()
 
-    if len(cubes) == 1:
-        action = robot.pickup_object(cubes[0], num_retries=3)
+    if cube:
+        robot.stop_all_motors()
+        action = robot.pickup_object(cube, num_retries=3)
+        action.wait_for_completed()
+
+        action = robot.drive_straight(distance_inches(11.2), speed_mmps(40))
+        action.wait_for_completed()
+
+        action = robot.place_object_on_ground_here(cube, num_retries=3)
+        action.wait_for_completed()
+
+        action = robot.turn_in_place(degrees(180))
+        action.wait_for_completed()
+
+        action = robot.drive_straight(distance_inches(15), speed_mmps(40))
+        action.wait_for_completed()
+
+        action = robot.turn_in_place(degrees(180))
         action.wait_for_completed()
         print("Completed action: result = %s" % action)
         print("Done.")
@@ -73,17 +97,7 @@ def burn_notice(robot: cozmo.robot.Robot):
 
 def fsm(robot: cozmo.robot.Robot):
     img_clf = imgclassification_sol.ImageClassifier()
-    (train_raw, train_labels) = img_clf.load_data_from_folder('./train/')
-
-    # convert images into features
-    print("before loop ", type(train_raw))
-    print("before loop ", train_raw.shape)
-    s_row, s_col = train_raw[0].shape[:2]
-    print(s_row, " ", s_col)
-    train_data = img_clf.extract_image_features(train_raw)
-
-    img_clf.train_classifier(train_data, train_labels)
-
+    model = joblib.load('trained_model.pkl')
     robot.enable_device_imu(True, True, True)
     robot.camera.image_stream_enabled = True
     robot.camera.color_image_enabled = False
@@ -91,32 +105,37 @@ def fsm(robot: cozmo.robot.Robot):
     robot.set_head_angle(cozmo.util.degrees(0)).wait_for_completed()
 
     while True:
-        latest_image = robot.world.latest_image
-        if(latest_image is None):
-            continue
-        raw_image = latest_image.raw_image
-        np_img = np.array(np.array(raw_image))
-        pil_image = Image.fromarray(np_img)
-        pil_image = pil_image.resize((320,240))
-        pil_image = np.array(pil_image)
-        arr = []
-        arr.append(pil_image)
-        pil_image = np.array(arr)
-        features = img_clf.extract_image_features(pil_image)
+        images = []
+        for i in range(10):
+            latest_image = robot.world.latest_image
+            if (latest_image is None):
+                continue
+            raw_image = latest_image.raw_image
+            np_img = np.array(raw_image)
+            pil_image = Image.fromarray(np_img)
+            pil_image = pil_image.resize((320, 240))
+            pil_image = np.array(pil_image)
+            images.append(pil_image)
+            time.sleep(.5)
+        print("ten images ", images)
+        features = img_clf.extract_image_features(np.array(images))
+        predicted_labels = model.predict(features)
 
-        predicted_label = img_clf.predict_labels(features)
+        unique_preds, counts = np.unique(np.array(predicted_labels), return_counts=True)
+        prediction = unique_preds[np.argmax(counts)]
+        print("prediction ", prediction)
 
-        if(predicted_label != 'none'):
-            robot.say_text(predicted_label[0]).wait_for_completed()
-            if(predicted_label == 'order'):
+        if(prediction != 'none'):
+            robot.say_text(prediction).wait_for_completed()
+            if(prediction == 'order'):
                 defuse(robot)
-            elif(predicted_label == 'drone'):
+            elif(prediction == 'drone'):
                 heights(robot)
-            elif(predicted_label == 'inspection'):
+            elif(prediction == 'inspection'):
                 burn_notice(robot)
 
         time.sleep(2)
-        print(predicted_label)
+
 def main():
     cozmo.run_program(fsm)
 

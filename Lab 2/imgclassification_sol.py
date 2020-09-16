@@ -6,6 +6,7 @@ from sklearn import svm, metrics
 from skimage import io, feature, filters, exposure, color
 import ransac_score
 import math
+import joblib
 
 class ImageClassifier:
 
@@ -49,6 +50,7 @@ class ImageClassifier:
     def train_classifier(self, train_data, train_labels):
         self.classifier = svm.LinearSVC()
         self.classifier.fit(train_data, train_labels)
+        joblib.dump(self.classifier, 'trained_model.pkl')
 
     def predict_labels(self, data):
         predicted_labels = self.classifier.predict(data)
@@ -108,6 +110,7 @@ def main():
     # train model and test on training data
     img_clf.train_classifier(train_data, train_labels)
     predicted_labels = img_clf.predict_labels(train_data)
+
     print("\nTraining results")
     print("=============================")
     print("Confusion Matrix:\n",metrics.confusion_matrix(train_labels, predicted_labels))
@@ -132,6 +135,7 @@ def main():
     print("=============================")
     s, i = img_clf.line_fitting(wall_raw)
     print(f"Line Fitting Score: {ransac_score.score(s,i)}/10")
+
 
 if __name__ == "__main__":
     main()
