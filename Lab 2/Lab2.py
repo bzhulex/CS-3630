@@ -117,13 +117,13 @@ def fsm(robot: cozmo.robot.Robot):
             pil_image = np.array(pil_image)
             images.append(pil_image)
             time.sleep(.5)
-        print("ten images ", images)
+
         features = img_clf.extract_image_features(np.array(images))
         predicted_labels = model.predict(features)
-
+        print("10 predictions: ", predicted_labels)
         unique_preds, counts = np.unique(np.array(predicted_labels), return_counts=True)
         prediction = unique_preds[np.argmax(counts)]
-        print("prediction ", prediction)
+        print("prediction: ", prediction)
 
         if(prediction != 'none'):
             robot.say_text(prediction).wait_for_completed()
