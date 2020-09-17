@@ -77,6 +77,7 @@ def heights(robot: cozmo.robot.Robot):
     robot.stop_all_motors()
     robot.play_anim_trigger(
         cozmo.anim.Triggers.CodeLabWin).wait_for_completed()  # play animation
+    robot.set_head_angle(cozmo.util.degrees(0)).wait_for_completed()
 
 def burn_notice(robot: cozmo.robot.Robot):
     '''
@@ -135,10 +136,10 @@ def fsm(robot: cozmo.robot.Robot):
             pil_image = np.array(pil_image)
             images.append(pil_image)
             time.sleep(.5)
-        print("ten images ", images)
+
         features = img_clf.extract_image_features(np.array(images))
         predicted_labels = model.predict(features)
-
+        print("ten predictions ", predicted_labels)
         unique_preds, counts = np.unique(np.array(predicted_labels), return_counts=True)
         prediction = unique_preds[np.argmax(counts)]
         print("prediction ", prediction)
