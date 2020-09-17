@@ -1,3 +1,4 @@
+#Brian Zhu and Miguel Garcia
 import asyncio
 import concurrent
 import numpy as np
