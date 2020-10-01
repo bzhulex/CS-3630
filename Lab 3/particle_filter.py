@@ -18,6 +18,17 @@ def motion_update(particles, odom):
                 after motion update
     """
     motion_particles = particles
+    if odom[0] == 0 and odom[1] == 0 and odom[2] == 0:
+        return motion_particles
+    for i in range(len(motion_particles)):
+        particle = motion_particles[i]
+        p_x, p_y, p_h = particle.xyh
+        n_x, n_y, d_h = add_odometry_noise(odom, setting.ODOM_HEAD_SIGMA, setting.ODOM_TRANS_SIGMA)
+        d_x, d_y = rotate_point(n_x, n_y, p_h)
+
+        np = Particle(p_x + d_x, p_y + d_y, p_h + d_h)
+        motion_particles[i] = np
+
     return motion_particles
 
 # ------------------------------------------------------------------------
