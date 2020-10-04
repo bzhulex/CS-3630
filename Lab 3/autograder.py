@@ -56,9 +56,9 @@ Err_rot = 10
 #Robot_speed = 0.5
 
 # # example circle 3
-#Robot_init_pose = (5, 4, 0)
-#Dh_circular = 20
-#Robot_speed = 0.3
+Robot_init_pose = (5, 4, 0)
+Dh_circular = 20
+Robot_speed = 0.3
 
 # # example circle 4
 #Robot_init_pose = (3, 2, 0)
@@ -66,9 +66,9 @@ Err_rot = 10
 #Robot_speed = 0.3
 
 # # example circle 5
-Robot_init_pose = (9, 9, 180)
-Dh_circular = 15
-Robot_speed = 0.5
+#Robot_init_pose = (9, 9, 180)
+#Dh_circular = 15
+#Robot_speed = 0.5
 
 
 # move robot circular
