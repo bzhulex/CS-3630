@@ -110,11 +110,7 @@ def measurement_update(particles, measured_marker_list, grid):
         #normalized_weights[np.isnan(normalized_weights)] = 0 # get rid of NaNs
 
         # next generate new particle distribution based on above probabilities
-        particles = np.random.choice(
-            particles,
-            size=setting.PARTICLE_COUNT - int(setting.PARTICLE_COUNT * .03),
-            replace=True,
-            p=normalized_weights)
+        particles = np.random.choice(particles, size=setting.PARTICLE_COUNT - int(setting.PARTICLE_COUNT * .03), replace=True, p=normalized_weights)
 
         return particles
 
@@ -140,8 +136,9 @@ def measurement_update(particles, measured_marker_list, grid):
     
     measured_particles = resample(particles, weights, grid)
 
-    measured_particles = np.ndarray.tolist(measured_particles) \
-                            + Particle.create_random(int(setting.PARTICLE_COUNT*.03), grid)
+    rand_particle = Particle.create_random(int(setting.PARTICLE_COUNT*.03), grid)
+
+    measured_particles = np.ndarray.tolist(measured_particles) + rand_particle
 
     return measured_particles
 
