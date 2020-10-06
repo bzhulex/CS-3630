@@ -17,8 +17,12 @@ def motion_update(particles, odom):
                 after motion update
     """
     motion_particles = particles
-    if odom[0] == 0 and odom[1] == 0 and odom[2] == 0:
+
+    d_x, d_y, d_h = odom
+
+    if d_x == 0 and d_y == 0 and d_h == 0:
         return motion_particles
+
     for i in range(len(motion_particles)):
         particle = motion_particles[i]
         p_x, p_y, p_h = particle.xyh
