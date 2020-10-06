@@ -55,20 +55,10 @@ def measurement_update(particles, measured_marker_list, grid):
         Returns: the list of particles represents belief p(x_{t} | u_{t})
                 after measurement update
     """
-    def gaussian_prob_density(robot_reading, particle_reading):
-        # set the 2*sigma^2 constant for distance and angle
-        const_d = 2 * setting.MARKER_TRANS_SIGMA**2
-        const_a = 2 * setting.MARKER_ROT_SIGMA**2
 
-        # calculate dist and angle
-        d = grid_distance(robot_reading[0],robot_reading[1],particle_reading[0],particle_reading[1])
-        a = diff_heading_deg(robot_reading[2],particle_reading[2])
-
-        # calculate probability from d and a
-        prob = np.exp(-(d**2)/const_d + (a**2)/const_a)
-        return prob
 
     def update_weight(landmarks, particle_readings):
+
         const_d = 2 * setting.MARKER_TRANS_SIGMA ** 2
         const_a = 2 * setting.MARKER_ROT_SIGMA ** 2
 
@@ -82,23 +72,20 @@ def measurement_update(particles, measured_marker_list, grid):
             # adjust probability w/ distance of robot_reading vs particle reading
             # keep the best one
 
-            best_d = 1e12 # start with some randomly high number
-            pairs = []
             prob = 1.0
             for landmark in measured_marker_list:
                 best_particle = None
                 best_prob = float('-inf')
                 for particle_reading in particle_readings:
+
                     d = math.sqrt(landmark[0]**2 + landmark[1]**2) - math.sqrt(particle_reading[0]**2 + particle_reading[1]**2)
-                    #d = grid_distance(landmark[0],landmark[1],particle_reading[0],particle_reading[1])
                     a = diff_heading_deg(landmark[2], particle_reading[2])
-                    #prob = np.exp(-(d ** 2) / const_d + (a ** 2) / const_a)
+
                     prob = np.exp(-(d ** 2) / (const_d)
                                        - (a ** 2) / (const_a))
                     if prob > best_prob:
                         best_prob  = prob
                         best_particle = particle_reading
-                #pairs.append((landmark, best_particle))
 
                 if best_particle != None:
                     particle_readings.remove(best_particle)
@@ -110,25 +97,15 @@ def measurement_update(particles, measured_marker_list, grid):
         return prob
 
     def resample(particles, weights, grid):
-        '''
-        Generate new set of n particles
-        - Normalize them (divide each particle weight by sum of weights)
-        - Generate new particle distro based on probability equal to above normalized prob
-        - Throw out the low ones and replace with random sampling
-        - Maintain some small percentage of random samples
-        '''
+
         # first normalize particle weights, grab relevant weight information
-        #print(weights)
-        SUM_WEIGHTS = np.sum(weights)
-        #print("SUM WEIGHTS ",SUM_WEIGHTS)
-        normalized_weights = np.divide(weights, np.sum(weights))
-        #print(normalized_weights)
+
+        min_weight = 1e-6 # we'll get NaN if the weight is too small
+        weights = [min_weight if weight < min_weight else weight for weight in weights]
+        normalized_weights = np.divide(weights, np.sum(weights), dtype=np.float64)
+        #normalized_weights[np.isnan(normalized_weights)] = 0 # get rid of NaNs
+
         # next generate new particle distribution based on above probabilities
-        # threshold = 1e-9 # anything less than this will be eliminated and replaced randomly
-        # for i in range(len(particles)):
-        #     if normalized_weights[i] < threshold:
-        #         # eliminate very low prob. particle and replace with rand samples
-        #         particles[i] = generate_distribution(particles, normalized_weights, grid)#particles[i].create_random(1,grid)[0]#generate_distribution(particles, normalized_weights, grid)
         particles = np.random.choice(
             particles,
             size=setting.PARTICLE_COUNT - int(setting.PARTICLE_COUNT * .03),
@@ -147,6 +124,7 @@ def measurement_update(particles, measured_marker_list, grid):
 
     else:
         for particle in particles:
+
             if (not grid.is_in(particle.x, particle.y)) or (not grid.is_free(particle.x, particle.y)):
                 weight = 0 # if not in map or within an obstacle, is a 0
             else:
@@ -155,6 +133,7 @@ def measurement_update(particles, measured_marker_list, grid):
             weights.append(weight)
 
     # resample
+    
     measured_particles = resample(particles, weights, grid)
 
     measured_particles = np.ndarray.tolist(measured_particles) \
