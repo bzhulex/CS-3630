@@ -69,41 +69,45 @@ def measurement_update(particles, measured_marker_list, grid):
         return prob
 
     def update_weight(landmarks, particle_readings):
+        const_d = 2 * setting.MARKER_TRANS_SIGMA ** 2
+        const_a = 2 * setting.MARKER_ROT_SIGMA ** 2
+
         if len(particle_readings) == 0:
             return 0 # if particle sees no landmarks, that particle gets a 0
 
         elif len(particle_readings) < len(measured_marker_list):
             return 0 # robot can't see more than particles which can see more
-        
+
         else:
             # adjust probability w/ distance of robot_reading vs particle reading
             # keep the best one
-            best_particle = None
+
             best_d = 1e12 # start with some randomly high number
             pairs = []
-
+            prob = 1.0
             for landmark in measured_marker_list:
+                best_particle = None
+                best_prob = float('-inf')
                 for particle_reading in particle_readings:
-                    d = grid_distance(landmark[0],landmark[1],particle_reading[0],particle_reading[1])
-                    if d < best_d:
-                        best_d = d
+                    d = math.sqrt(landmark[0]**2 + landmark[1]**2) - math.sqrt(particle_reading[0]**2 + particle_reading[1]**2)
+                    #d = grid_distance(landmark[0],landmark[1],particle_reading[0],particle_reading[1])
+                    a = diff_heading_deg(landmark[2], particle_reading[2])
+                    #prob = np.exp(-(d ** 2) / const_d + (a ** 2) / const_a)
+                    prob = np.exp(-(d ** 2) / (const_d)
+                                       - (a ** 2) / (const_a))
+                    if prob > best_prob:
+                        best_prob  = prob
                         best_particle = particle_reading
-                pairs.append((landmark, best_particle))
-            
-            prob = 1
-            for pair in pairs:
-                prob*=gaussian_prob_density(pair[0], pair[1]) #adjust probability
-            
+                #pairs.append((landmark, best_particle))
+
+                if best_particle != None:
+                    particle_readings.remove(best_particle)
+
+                prob *= best_prob
+
+        prob *= 0.5 ** abs(len(particle_readings) - len(measured_marker_list))
+
         return prob
-
-    def generate_distribution(particles, weights, grid):
-        # need to re-normalize the weights for the p argument
-        SUM_WEIGHTS = sum(weight for weight in weights)
-        normalized_weights = [weight/SUM_WEIGHTS for weight in weights]     
-
-        #particle = np.random.choice(particles, size=1, p = normalized_weights)[0]
-        particle = Particle.create_random(1, grid)[0]
-        return particle
 
     def resample(particles, weights, grid):
         '''
@@ -114,27 +118,33 @@ def measurement_update(particles, measured_marker_list, grid):
         - Maintain some small percentage of random samples
         '''
         # first normalize particle weights, grab relevant weight information
-
-        SUM_WEIGHTS = sum(weight for weight in weights)
-        normalized_weights = [weight/SUM_WEIGHTS for weight in weights]     
-
+        #print(weights)
+        SUM_WEIGHTS = np.sum(weights)
+        #print("SUM WEIGHTS ",SUM_WEIGHTS)
+        normalized_weights = np.divide(weights, np.sum(weights))
+        #print(normalized_weights)
         # next generate new particle distribution based on above probabilities
-        threshold = 1e-9 # anything less than this will be eliminated and replaced randomly
-        for i in range(len(particles)):
-            if normalized_weights[i] < threshold:
-                # eliminate very low prob. particle and replace with rand samples
-                particles[i] = generate_distribution(particles, normalized_weights, grid)#particles[i].create_random(1,grid)[0]#generate_distribution(particles, normalized_weights, grid)
-        
+        # threshold = 1e-9 # anything less than this will be eliminated and replaced randomly
+        # for i in range(len(particles)):
+        #     if normalized_weights[i] < threshold:
+        #         # eliminate very low prob. particle and replace with rand samples
+        #         particles[i] = generate_distribution(particles, normalized_weights, grid)#particles[i].create_random(1,grid)[0]#generate_distribution(particles, normalized_weights, grid)
+        particles = np.random.choice(
+            particles,
+            size=setting.PARTICLE_COUNT - int(setting.PARTICLE_COUNT * .03),
+            replace=True,
+            p=normalized_weights)
+
         return particles
 
     # now we combine everything
-    init_weight = 1e-10 
+    init_weight = 1e-10
     weights = []
 
     #some weight that all particles will get if no landmarks found by robot
     if len(measured_marker_list) == 0:
-        weights = [init_weight]*len(particles)
-    
+        return particles
+
     else:
         for particle in particles:
             if (not grid.is_in(particle.x, particle.y)) or (not grid.is_free(particle.x, particle.y)):
@@ -143,11 +153,12 @@ def measurement_update(particles, measured_marker_list, grid):
                 particle_readings = particle.read_markers(grid)
                 weight = update_weight(measured_marker_list, particle_readings)
             weights.append(weight)
-    
+
     # resample
     measured_particles = resample(particles, weights, grid)
 
-
+    measured_particles = np.ndarray.tolist(measured_particles) \
+                            + Particle.create_random(int(setting.PARTICLE_COUNT*.03), grid)
 
     return measured_particles
 
