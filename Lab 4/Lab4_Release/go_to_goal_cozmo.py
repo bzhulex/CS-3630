@@ -152,8 +152,31 @@ async def run(robot: cozmo.robot.Robot):
     ###################
 
     # YOUR CODE HERE
+    isConverged = False
+
+    while not isConverged:
+
+        previous_pose = robot.pose
+        odometry = compute_odometry(previous_pose)
+
+        if robot.is_picked_up:
+            robot.stop_all_motors()
+            zero_angle = cozmo.util.Angle(degrees=0)
+            reset_pose = cozmo.util.Pose(0, 0, 0, angle_z=zero_angle)
+            previous_pose = reset_pose
+            robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabDejected).wait_for_completed()
+            particles = ParticleFilter(grid)
+            converged = False
+
+        marker_list, annotated_image = marker_processing(robot, camera_settings, show_diagnostic_image=False)
+
+        if not isConverged:
+            mean = particles.update(odometry, marker_list)
+            
 
     ###################
+
+
 
 class CozmoThread(threading.Thread):
     
