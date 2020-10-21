@@ -131,7 +131,7 @@ async def marker_processing(robot, camera_settings, show_diagnostic_image=False)
 
 async def run(robot: cozmo.robot.Robot):
 
-    def go_to_goal(mean):
+    async def go_to_goal(mean):
         dist = grid_distance(goal[0],goal[1], mean[0], mean[1])
         heading = diff_heading_deg(goal[2], mean[2])
         heading = heading *180/PI
@@ -144,8 +144,6 @@ async def run(robot: cozmo.robot.Robot):
 
     global flag_odom_init, last_pose
     global grid, gui, pf
-    wheel_dif = 0
-    speed = 10
 
     # start streaming
     robot.camera.image_stream_enabled = True
@@ -166,6 +164,10 @@ async def run(robot: cozmo.robot.Robot):
 
     # YOUR CODE HERE
     isConverged = False
+    wheel_dif = 2
+    speed = 20
+    confidence_count = 0
+    converged = False
 
 
     while not isConverged:
@@ -202,10 +204,15 @@ async def run(robot: cozmo.robot.Robot):
 
         if confident:
             wheel_dif+=1 # turn less, move less, when more confident
+            confidence_count+=1
         elif not confident and wheel_dif>2:
             wheel_dif-=1
-        
+            confidence_count-=1
+        print("CONFIDENCE COUNT:")
+        print(confidence_count)
         await robot.drive_wheels(speed/wheel_dif, -speed/wheel_dif)
+        if confidence_count > 7:
+            converged = True
 
         # Global Loc
         if not converged:
