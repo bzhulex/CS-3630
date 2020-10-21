@@ -204,14 +204,17 @@ async def run(robot: cozmo.robot.Robot):
 
         if confident:
             wheel_dif+=1 # turn less, move less, when more confident
-            confidence_count+=1
+            confidence_count+=4
         elif not confident and wheel_dif>2:
             wheel_dif-=1
             confidence_count-=1
-        print("CONFIDENCE COUNT:")
-        print(confidence_count)
+        
+        print(f"Is confident:{confident}")
+        print(f"CONFIDENCE COUNT: {confidence_count}")
+
         await robot.drive_wheels(speed/wheel_dif, -speed/wheel_dif)
-        if confidence_count > 7:
+
+        if confidence_count > 7: # some arbitrary number that represents when we are very confident about where we are
             converged = True
 
         # Global Loc
