@@ -131,8 +131,21 @@ async def marker_processing(robot, camera_settings, show_diagnostic_image=False)
 
 async def run(robot: cozmo.robot.Robot):
 
+    def go_to_goal(mean):
+        dist = grid_distance(goal[0],goal[1], mean[0], mean[1])
+        heading = diff_heading_deg(goal[2], mean[2])
+        heading = heading *180/PI
+    
+        await robot.turn_in_place(degrees(int(heading))).wait_for_completed()
+        await robot.drive_straight(distance_mm(dist*grid_scale), speed_mmps(40)).wait_for_completed()
+        await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabHappy).wait_for_completed()
+
+
+
     global flag_odom_init, last_pose
     global grid, gui, pf
+    wheel_dif = 0
+    speed = 10
 
     # start streaming
     robot.camera.image_stream_enabled = True
@@ -154,25 +167,63 @@ async def run(robot: cozmo.robot.Robot):
     # YOUR CODE HERE
     isConverged = False
 
+
     while not isConverged:
 
         previous_pose = robot.pose
         odometry = compute_odometry(previous_pose)
 
+        # kidnapping
         if robot.is_picked_up:
             robot.stop_all_motors()
             zero_angle = cozmo.util.Angle(degrees=0)
             reset_pose = cozmo.util.Pose(0, 0, 0, angle_z=zero_angle)
             previous_pose = reset_pose
-            robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabDejected).wait_for_completed()
-            particles = ParticleFilter(grid)
+            await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabDejected).wait_for_completed()
+            #particles = ParticleFilter(grid)
+            pf.particles = Particle.create_random(PARTICLE_COUNT, grid)
+            flag_odom_init = True
             converged = False
 
-        marker_list, annotated_image = marker_processing(robot, camera_settings, show_diagnostic_image=False)
 
-        if not isConverged:
-            mean = particles.update(odometry, marker_list)
+        marker_list, annotated_image = await marker_processing(robot, camera_settings, show_diagnostic_image=False)
+
+        if not converged:
+            mean = pf.update(odometry, marker_list)
+            confident = mean[3]
+
+        # GUI
+        gui.show_particles(pf.particles)
+        gui.show_mean(mean[0], mean[1], mean[2])
+        gui.show_camera_image(annotated_image)
+        gui.updated.set()
+
+        # Turn Less, Move Less, when confident
+
+        if confident:
+            wheel_dif+=1 # turn less, move less, when more confident
+        elif not confident and wheel_dif>2:
+            wheel_dif-=1
+        
+        await robot.drive_wheels(speed/wheel_dif, -speed/wheel_dif)
+
+        # Global Loc
+        if not converged:
+            if len(marker_list)  == 0:
+                # if none found, spin around
+                await robot.drive_wheels(speed, -speed)
             
+            elif len(marker_list) > 0:
+                await robot.drive_wheels(speed, speed)
+
+        else: 
+            # Stop and look for goal
+            await robot.drive_wheels(0,0)
+            go_to_goal(mean)
+      
+
+
+
 
     ###################
 
