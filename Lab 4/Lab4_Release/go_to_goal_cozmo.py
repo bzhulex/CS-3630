@@ -7,6 +7,8 @@
 # except ImportError:
 #     pass
 
+#BRIAN ZHU AND MIGUEL GARCIA
+
 from skimage import color
 import cozmo
 import numpy as np
@@ -49,8 +51,8 @@ class ParticleFilter:
         return (m_x, m_y, m_h, m_confident)
 
 # tmp cache
-last_pose = cozmo.util.Pose(0,0,0,angle_z=cozmo.util.Angle(degrees=0))
-flag_odom_init = False
+prev_pose = cozmo.util.Pose(0, 0, 0, angle_z=cozmo.util.Angle(degrees=0))
+picked_up_flag = False
 
 # goal location for the robot to drive to, (x, y, theta)
 goal = (6,10,0)
@@ -72,9 +74,9 @@ def compute_odometry(curr_pose, cvt_inch=True):
         - 3-tuple (dx, dy, dh) representing the odometry
     '''
 
-    global last_pose, flag_odom_init
-    last_x, last_y, last_h = last_pose.position.x, last_pose.position.y, \
-        last_pose.rotation.angle_z.degrees
+    global prev_pose, picked_up_flag
+    last_x, last_y, last_h = prev_pose.position.x, prev_pose.position.y, \
+                             prev_pose.rotation.angle_z.degrees
     curr_x, curr_y, curr_h = curr_pose.position.x, curr_pose.position.y, \
         curr_pose.rotation.angle_z.degrees
     
@@ -132,19 +134,7 @@ async def marker_processing(robot, camera_settings, show_diagnostic_image=False)
 
 
 async def run(robot: cozmo.robot.Robot):
-
-    async def go_to_goal(mean):
-        dist = grid_distance(goal[0],goal[1], mean[0], mean[1])
-        heading = diff_heading_deg(goal[2], mean[2])
-        heading = heading *180/PI
-    
-        await robot.turn_in_place(degrees(int(heading))).wait_for_completed()
-        await robot.drive_straight(distance_mm(dist*grid_scale), speed_mmps(40)).wait_for_completed()
-        await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabHappy).wait_for_completed()
-
-
-
-    global flag_odom_init, last_pose
+    global picked_up_flag, prev_pose
     global grid, gui, pf
 
     # start streaming
@@ -152,6 +142,7 @@ async def run(robot: cozmo.robot.Robot):
     robot.camera.color_image_enabled = False
     robot.camera.enable_auto_exposure()
     await robot.set_head_angle(cozmo.util.degrees(0)).wait_for_completed()
+    await robot.set_lift_height(0).wait_for_completed()
 
     # Obtain the camera intrinsics matrix
     fx, fy = robot.camera.config.focal_length.x_y
@@ -165,204 +156,107 @@ async def run(robot: cozmo.robot.Robot):
     ###################
 
     # YOUR CODE HERE
-    isConverged = False
-    wheel_dif = 2
-    speed = 20
-    confidence_count = 0
-    converged = False
-
-
-    # while not isConverged:
-    #
-    #     previous_pose = robot.pose
-    #     odometry = compute_odometry(previous_pose)
-    #
-    #     # kidnapping
-    #     if robot.is_picked_up:
-    #         robot.stop_all_motors()
-    #         zero_angle = cozmo.util.Angle(degrees=0)
-    #         reset_pose = cozmo.util.Pose(0, 0, 0, angle_z=zero_angle)
-    #         previous_pose = reset_pose
-    #         await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabDejected).wait_for_completed()
-    #         #particles = ParticleFilter(grid)
-    #         pf.particles = Particle.create_random(PARTICLE_COUNT, grid)
-    #         flag_odom_init = True
-    #         converged = False
-    #
-    #
-    #     marker_list, annotated_image = await marker_processing(robot, camera_settings, show_diagnostic_image=False)
-    #
-    #     if not converged:
-    #         mean = pf.update(odometry, marker_list)
-    #         confident = mean[3]
-    #
-    #     # GUI
-    #     gui.show_particles(pf.particles)
-    #     gui.show_mean(mean[0], mean[1], mean[2])
-    #     gui.show_camera_image(annotated_image)
-    #     gui.updated.set()
-    #
-    #     # Turn Less, Move Less, when confident
-    #
-    #     if confident:
-    #         wheel_dif+=1 # turn less, move less, when more confident
-    #         confidence_count+=4
-    #     elif not confident and wheel_dif>2:
-    #         wheel_dif-=1
-    #         confidence_count-=1
-    #
-    #     print(f"Is confident:{confident}")
-    #     print(f"CONFIDENCE COUNT: {confidence_count}")
-    #
-    #     await robot.drive_wheels(speed/wheel_dif, -speed/wheel_dif)
-    #
-    #     if confidence_count > 7: # some arbitrary number that represents when we are very confident about where we are
-    #         converged = True
-    #
-    #     # Global Loc
-    #     if not converged:
-    #         if len(marker_list)  == 0:
-    #             # if none found, spin around
-    #             await robot.drive_wheels(speed, -speed)
-    #
-    #         elif len(marker_list) > 0:
-    #             await robot.drive_wheels(speed, speed)
-    #
-    #     else:
-    #         # Stop and look for goal
-    #         await robot.drive_wheels(0,0)
-    #         go_to_goal(mean)
-    PI = 3.14159
-    start = time.time()
-    converged = False
-    convergence_score = 0
-    arrived = False
+    start_time = time.time()
+    has_converged = False
+    converged_score = 0
+    arrived_to_goal = False
 
     while True:
-        if arrived:
-            while not robot.is_picked_up:
-                await robot.drive_straight(distance_mm(0), speed_mmps(0)).wait_for_completed()
 
-        # Detect whether it is kidnapped
-        if robot.is_picked_up:
-            # indicate to re-localize and continue
-            # print("Picked up")
-            flag_odom_init = False
-            arrived = False
-            converged = False
-            convergence_score = 0
+        if arrived_to_goal and not robot.is_picked_up:
             await robot.drive_wheels(0.0, 0, 0)
-            # Have the robot act unhappy when we pick it up for kidnapping
-            await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabUnhappy).wait_for_completed()
+
+        #kidnapped
+        if robot.is_picked_up:
+            picked_up_flag = False
+            arrived_to_goal = False
+            has_converged = False
+            converged_score = 0
+            await robot.drive_wheels(0.0, 0, 0)
+            await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabDejected).wait_for_completed()
 
             while robot.is_picked_up:
-                await robot.drive_straight(distance_mm(0), speed_mmps(0)).wait_for_completed()
-            continue
+                await robot.drive_wheels(0.0, 0, 0)
 
-        # use the flag_odom_init to indicate whether it is kidnapped
-        if flag_odom_init == False:
-            # Reset the last pose
-            last_pose = cozmo.util.Pose(0, 0, 0, angle_z=cozmo.util.Angle(degrees=0))
-
-            # Reset particle filter to a uniform distribution
+            prev_pose = cozmo.util.Pose(0, 0, 0, angle_z=cozmo.util.Angle(degrees=0))
             pf.particles = Particle.create_random(PARTICLE_COUNT, grid)
 
-            flag_odom_init = True
+            continue
 
-        # Get the current pose
+
+        #INFORMATION UPDATE
         curr_pose = robot.pose
-
-        # Obtain odometry information
         odom = compute_odometry(curr_pose, cvt_inch=True)
-        last_pose = robot.pose
+        prev_pose = robot.pose
+        marker_list, annotated_image = await marker_processing(robot, camera_settings, show_diagnostic_image=False)
 
-        # Obtain list of currently seen markers and their poses
-        marker_list, camera_image = await marker_processing(robot, camera_settings, show_diagnostic_image=False)
-
-        # Update the particle filter using the above information
-        # Not that the the first element in marker_list is the list
-        (m_x, m_y, m_h, m_confident) = pf.update(odom, marker_list)
+        #PF
+        (mean_x, mean_y, mean_h, mean_confidence) = pf.update(odom, marker_list)
 
         gui.show_particles(pf.particles)
-        gui.show_mean(m_x, m_y, m_h)
-        gui.show_camera_image(camera_image)
+        gui.show_mean(mean_x, mean_y, mean_h)
+        gui.show_camera_image(annotated_image)
         gui.updated.set()
-        # print("marker_list:", marker_list)
 
-        print(m_x, m_y, m_h, m_confident)
+        #pf returns convergence
+        if mean_confidence:
+            converged_score += 2.5
 
-        # if converged once
-        if m_confident:
-            convergence_score += 3
+        # converged and confident of it
+        if converged_score >= 25:
+            has_converged = True
 
-        # Converged many times means good estimate
-        if convergence_score > 30:
-            converged = True
+        #if pf converged but then diverged again
+        if has_converged and not mean_confidence:
+            converged_score -= 1.5
 
-        # If has converged but diverge again
-        if converged and not m_confident:
-            convergence_score -= 2
+        # if the pf diverges a lot, then reset
+        if converged_score < 0:
+            has_converged = False
+            converged_score = 0
 
-        # if diverge too much
-        if convergence_score < 0:
-            converged = False
-            convergence_score = 0
+        temp_score = 1 + converged_score / 10
+        await robot.drive_wheels(15.0 / temp_score, -15.0 / temp_score)
 
-        await robot.drive_wheels(15.0 / (1 + convergence_score / 10), -15.0 / (1 + convergence_score / 10))
+        if has_converged:
+            await robot.drive_wheels(0.0, 0, 0)
+            goal_x = goal[0]
+            goal_y = goal[1]
+            goal_h = goal[2]
 
-        if not converged:
-            # the localization has not converged -- global localization problem
-            # Have the robot actively look around (spin in place)
-            if ((time.time() - start) // 1) % 8 < 3 or len(marker_list) <= 0:
-                await robot.drive_wheels(15.0, -15, 0)
+            d_x = goal_x - mean_x
+            d_y = goal_y - mean_y
+
+            target = atan2(d_y, d_x) * 180.0 / 3.14159
+
+            initial_degree = diff_heading_deg(target, mean_h)
+            zero_degree = diff_heading_deg(goal_h, target)
+            distance = grid_distance(mean_x, mean_y, goal_x, goal_y)
+
+            # turn to the right angle
+            await robot.turn_in_place(degrees(int(initial_degree * 0.95))).wait_for_completed()
+            # drive to the goal
+            await robot.drive_straight(distance_mm(distance * grid.scale * 0.95), speed_mmps(50)).wait_for_completed()
+            # turn to zero degrees
+            await robot.turn_in_place(degrees(int(zero_degree * 0.975))).wait_for_completed()
+            # be happy!
+            await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabHappy).wait_for_completed()
+
+            arrived_to_goal = True
+        else:
+            # if there is no convergence, keep turning in place
+            if ((time.time() - start_time) // 1) % 8 < 3 or len(marker_list) <= 0:
+                await robot.drive_wheels(12.0, -12, 0)
             elif len(marker_list) > 0:
-                if (marker_list[0][0] > 12):
-                    await robot.drive_wheels(40.0, 40, 0)
-                if (marker_list[0][0] < 8):
-                    await robot.drive_wheels(-40.0, -40, 0)
+                markers_loc = marker_list[0][0]
+                if markers_loc > 12:
+                    await robot.drive_wheels(35.0, 35, 0)
+                if markers_loc < 8:
+                    await robot.drive_wheels(-35.0, -35, 0)
             else:
                 await robot.drive_wheels(0.0, 0, 0)
 
-            # await robot.drive_wheels(15.0, -15.0)
-
-            # if ((time.time() - start) // 1) % 8 == 0 or len(marker_list) <= 0:
-            #     await robot.turn_in_place(degrees(random.randint(-60, 60))).wait_for_completed()
-            # elif ((time.time() - start) // 1) % 2 == 0 and len(marker_list) > 0:
-            #     await robot.drive_straight(distance_mm(random.randint(-50, 50)), speed_mmps(50)).wait_for_completed()
-            # else:
-            #     pass
-
-            # if ((time.time() - start) // 2) % 3 == 0:
-            #     await robot.drive_wheels(30.0, 30,0)
-            # elif ((time.time() - start) // 2) % 3 == 1:
-            #     await robot.drive_wheels(-30.0, -30,0)
-            # elif ((time.time() - start) // 2) % 3 == 2:
-            #     await robot.drive_wheels(-30.0, 30,0)
-
-        else:
-            await robot.drive_wheels(0.0, 0, 0)
-
-            dx = goal[0] - m_x
-            dy = goal[1] - m_y
-            target_heading = atan2(dy, dx) * 180.0 / PI
-
-            dh_deg = diff_heading_deg(target_heading, m_h)
-            dist = grid_distance(m_x, m_y, goal[0], goal[1])
-            dh_deg_2 = diff_heading_deg(goal[2], target_heading)
-
-            # await robot.turn_in_place(degrees(dh_deg)).wait_for_completed()
-            await robot.turn_in_place(degrees(int(dh_deg * 0.95))).wait_for_completed()
-            # await robot.drive_straight(distance_mm(dist * grid.scale + 1), speed_mmps(50)).wait_for_completed()
-            await robot.drive_straight(distance_mm(dist * grid.scale * 0.95), speed_mmps(50)).wait_for_completed()
-            # await robot.turn_in_place(degrees(dh_deg_2 - sign(dh_deg_2) * 10 )).wait_for_completed()
-            await robot.turn_in_place(degrees(int(dh_deg_2 * 0.975))).wait_for_completed()
-            await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabHappy).wait_for_completed()
-
-            arrived = True
-
     ###################
-
-
 
 class CozmoThread(threading.Thread):
     
