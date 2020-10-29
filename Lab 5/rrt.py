@@ -14,16 +14,22 @@ def step_from_to(node0, node1, limit=75):
     ########################################################################
     # TODO: please enter your code below.
     # 1. If distance between two nodes is less than limit, return node1
+    dist = get_dist(node0, node1)
+    if dist < limit:
+        return node1
     # 2. Otherwise, return a node in the direction from node0 to node1 whose
     #    distance to node0 is limit. Recall that each iteration we can move
     #    limit units at most
     # 3. Hint: please consider using np.arctan2 function to get vector angle
     # 4. Note: remember always return a Node object
+    else:
+        theta = np.arctan2((node1.y-node0.y)/(node1.x-node0.x))
+        xCoord = limit * np.cos(theta)
+        yCoord = limit * np.sin(theta)
+        node = Node((xCoord, yCoord))
+        return node
     
-    
-    #temporary cod below to be replaced
-    return node1
-    ############################################################################
+        ############################################################################
 
     
     
@@ -38,10 +44,13 @@ def node_generator(cmap):
     # 2. Use CozMap.is_inbound and CozMap.is_inside_obstacles to determine the
     #    legitimacy of the random node.
     # 3. Note: remember always return a Node object
+
+    # first check if legitimate location (if not, create new Node (and if that's not, continue...))
+    inside_obstacle = cmap.is_inside_obstacles(rand_node)
+    outside_map = not cmap.is_inbound(rand_node)
+    while rand_node==None or inside_obstacle or outside_map:
+        rand_node = Node((random.random() * cmap.width, random.random()*cmap.height))
     
-    
-    #temporary cod below to be replaced
-    pass
     return rand_node
     ############################################################################
     
@@ -53,18 +62,33 @@ def RRT(cmap, start):
     while (cmap.get_num_nodes() < MAX_NODES):
         ########################################################################
         # TODO: please enter your code below.
+
         # 1. Use CozMap.get_random_valid_node() to get a random node. This
         #    function will internally call the node_generator above
+        rand_node = cmap.get_random_valid_node()
+
         # 2. Get the nearest node to the random node from RRT
+        # do this by grabbing some (other) random node, and comparing all other nodes to it
+        # replace comparison node with any "closer" node
+        nodes = cmap.get_nodes()
+        best_dist = 1e9
+        if get_dist(nodes[0], rand_node) != 0:
+            # don't wanna compare the same node to the one we just got
+            nearest_node = nodes[0]
+        else:
+            nearest_node = nodes[1] # just grab another node if is the same node
+        for node in nodes:
+            dist = get_dist(rand_node, node)
+            if dist != 0 and dist < best_dist:
+                best_dist = dist
+                nearest_node = node     
+
         # 3. Limit the distance RRT can move
+        nearest_node = step_from_to(nearest_node, rand_node)
+        
         # 4. Add one path from nearest node to random node
-        #
+        # already done?
         
-        
-        #temporary code below to be replaced
-        rand_node = None
-        nearest_node = None
-        pass
         ########################################################################
         
         
