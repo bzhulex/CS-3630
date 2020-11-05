@@ -2,6 +2,7 @@ import cozmo
 import math
 import sys
 import time
+import random
 
 from cmap import *
 from gui import *
@@ -23,7 +24,7 @@ def step_from_to(node0, node1, limit=75):
     # 3. Hint: please consider using np.arctan2 function to get vector angle
     # 4. Note: remember always return a Node object
     else:
-        theta = np.arctan2((node1.y-node0.y)/(node1.x-node0.x))
+        theta = np.arctan2((node1.y-node0.y), (node1.x-node0.x))
         xCoord = limit * np.cos(theta)
         yCoord = limit * np.sin(theta)
         node = Node((xCoord, yCoord))
@@ -46,10 +47,14 @@ def node_generator(cmap):
     # 3. Note: remember always return a Node object
 
     # first check if legitimate location (if not, create new Node (and if that's not, continue...))
+    rand_node = Node((random.random() * cmap.width, random.random() * cmap.height))
+
     inside_obstacle = cmap.is_inside_obstacles(rand_node)
     outside_map = not cmap.is_inbound(rand_node)
     while rand_node==None or inside_obstacle or outside_map:
         rand_node = Node((random.random() * cmap.width, random.random()*cmap.height))
+        outside_map = not cmap.is_inbound(rand_node)
+        inside_obstacle = cmap.is_inside_obstacles(rand_node)
     
     return rand_node
     ############################################################################
@@ -71,7 +76,7 @@ def RRT(cmap, start):
         # do this by grabbing some (other) random node, and comparing all other nodes to it
         # replace comparison node with any "closer" node
         nodes = cmap.get_nodes()
-        best_dist = 1e9
+        best_dist = math.inf
         if get_dist(nodes[0], rand_node) != 0:
             # don't wanna compare the same node to the one we just got
             nearest_node = nodes[0]
@@ -84,16 +89,15 @@ def RRT(cmap, start):
                 nearest_node = node     
 
         # 3. Limit the distance RRT can move
-        nearest_node = step_from_to(nearest_node, rand_node)
-        
+        limit_node = step_from_to(nearest_node, rand_node)
         # 4. Add one path from nearest node to random node
         # already done?
-        
+
         ########################################################################
         
         
-        time.sleep(0.01)
-        cmap.add_path(nearest_node, rand_node)
+        time.sleep(0.05)
+        cmap.add_path(nearest_node, limit_node)
         if cmap.is_solved():
             break
 
@@ -123,7 +127,7 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
     #assume start angle is 0
     #Add final position as goal point to cmap, with final position being defined as a point that is at the center of the arena 
     #you can get map width and map weight from cmap.get_size()
-
+    
     
     #reset the current stored paths in cmap
     #call the RRT function using your cmap as input, and RRT will update cmap with a new path to the target from the start position
@@ -174,11 +178,17 @@ def get_global_node(local_angle, local_origin, node):
     """
     ########################################################################
     # TODO: please enter your code below.
-    
-    
-    
+
+    #get trig values
+    sin = math.sin(local_angle)
+    cos = math.cos(local_angle)
+    y_val = node.y * sin + node.y * cos
+    x_val = node.x * cos - node.x * sin
+    local_x = local_origin.x
+    local_y = local_origin.y
+    # declare new node
     #temporary code below to be replaced
-    new_node = None
+    new_node = Node((x_val + local_x, y_val + local_y))
     return new_node
     ########################################################################
 
