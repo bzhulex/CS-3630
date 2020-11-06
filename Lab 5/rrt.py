@@ -202,12 +202,13 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
         #
         #     await robot.drive_straight(cozmo.util.distance_mm(dist), cozmo.util.speed_mmps(30)).wait_for_completed()
 
-        # Update the current Cozmo position (cozmo_pos and cozmo_angle) to be new node position and angle
-        # robot.pose.position.x = curr_node.x
-        # robot.pose.position.y = curr_node.y
-        # robot.angle = angle
+        #Update the current Cozmo position (cozmo_pos and cozmo_angle) to be new node position and angle
+        #robot.pose.position.x = curr_node.x
+        #robot.pose.position.y = curr_node.y
+        #robot.angle = angle
         # # Set new start position for replanning with RRT
-        # RRT(cmap, cmap.get_start())
+        cmap.set_start(get_current_pose(robot))
+        RRT(cmap, cmap.get_start())
         # #detect any visible obstacle cubes and update cmap
         (updated_cmap, goal_c, mark) = await detect_cube_and_update_cmap(robot, marked,
                                                                   (robot.pose.position.x, robot.pose.position.y))
