@@ -232,26 +232,34 @@ class CozMap:
         # TODO: please enter your code below.
         path = self.get_path()
 
-        loops = 50
 
-        for i in range(loops):
-            i_0 = random.random(0, len(path) - 1)
-            i_1 = random.random(0, len(path) - 1)
 
-            if i_0 == i_1:
-                break
+        for i in range(len(path) * 4):
+            [node0, node1] = [path[i] for i in sorted(random.sample(range(len(path)), 2))]
+            if self.is_collision_with_obstacles((node0, node1)):
+                continue
+            else:
+                node1.parent = node0
 
-            min_i = min([i_0, i_1])
-            max_i = max([i_0, i_1])
-
-            start = path[min_i]
-            end = path[max_i]
-
-            collided = self.is_collision_with_obstacles((start, end))
-
-            if not collided:
-                end.parent = start
-                path = path[0:min_i + 1] + path[max_i:len(path) + 1]
+        path = self.get_path()
+        #return path
+            # i_0 = random.random(0, len(path) - 1)
+            # i_1 = random.random(0, len(path) - 1)
+            #
+            # if i_0 == i_1:
+            #     break
+            #
+            # min_i = min([i_0, i_1])
+            # max_i = max([i_0, i_1])
+            #
+            # start = path[min_i]
+            # end = path[max_i]
+            #
+            # collided = self.is_collision_with_obstacles((start, end))
+            #
+            # if not collided:
+            #     end.parent = start
+            #     path = path[0:min_i + 1] + path[max_i:len(path) + 1]
 
         
         #temporary code below to be replaced
