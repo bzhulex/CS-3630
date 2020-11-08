@@ -46,6 +46,11 @@ def node_generator(cmap):
     #    legitimacy of the random node.
     # 3. Note: remember always return a Node object
 
+    # first, 5% chance that the goal location is returned
+    if random.random() < 0.05:
+        goal = cmap.get_goals()[0]
+        return Node((goal.x, goal.y))
+
     # first check if legitimate location (if not, create new Node (and if that's not, continue...))
     rand_node = Node((random.random() * cmap.width, random.random() * cmap.height))
 
