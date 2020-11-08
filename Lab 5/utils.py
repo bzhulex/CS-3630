@@ -19,7 +19,7 @@ class Node(object):
         return self.coord[1]
 
     def __getitem__(self, key):
-        assert (key == 0 or key == 1)
+        assert (key == 0 or key == 1) # NOTE TO SELF/PARTNER: DO NOT CHANGE THIS TO ALLOW FOR 2
         return self.coord[key]
 
 

@@ -24,14 +24,26 @@ def step_from_to(node0, node1, limit=75):
     # 3. Hint: please consider using np.arctan2 function to get vector angle
     # 4. Note: remember always return a Node object
     else:
-        theta = np.arctan2((node1.y-node0.y), (node1.x-node0.x))
-        xCoord = limit * np.cos(theta)
-        yCoord = limit * np.sin(theta)
-        node = Node((xCoord, yCoord))
-        #node = Node((
-        #    node0.x * (1 - limit / dist) + node1.x * (limit / dist),
-        #    node0.y * (1 - limit / dist) + node1.y * (limit / dist)
-        #))
+
+        # Instead of using theta and calculating x and y like below:
+        # -----------------------------------------------------------
+        #theta = np.arctan2((node1.y-node0.y), (node1.x-node0.x))
+        #xCoord = limit * np.cos(theta)
+        #yCoord = limit * np.sin(theta)
+        #node = Node((xCoord, yCoord))
+        # -------------------------------------------------------------
+
+        # We know we can only go a certain % of the distance
+        ratio = limit / dist
+
+        # the difference b/t node0 and node1, times that ratio, (how far we can travel) actually is the offset from node0
+        offsetX = node1.x * ratio - node0.x * ratio
+        offsetY = node1.y * ratio - node0.y * ratio
+
+        node = Node((
+            node0.x + offsetX,
+            node0.y + offsetY
+        ))
 
         return node
     
@@ -190,6 +202,7 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
         if cmap.is_solved():
             print("2")
             if end_pt == len(path):
+                print("finished!")
                 continue
             first = path[end_pt - 1]
             last = path[end_pt]
