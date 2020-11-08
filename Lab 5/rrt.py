@@ -28,6 +28,11 @@ def step_from_to(node0, node1, limit=75):
         xCoord = limit * np.cos(theta)
         yCoord = limit * np.sin(theta)
         node = Node((xCoord, yCoord))
+        #node = Node((
+        #    node0.x * (1 - limit / dist) + node1.x * (limit / dist),
+        #    node0.y * (1 - limit / dist) + node1.y * (limit / dist)
+        #))
+
         return node
     
         ############################################################################
@@ -126,6 +131,7 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
 
     #assume start position is in cmap and was loaded from emptygrid.json as [50, 35] already
     #assume start angle is 0
+    
     #Add final position as goal point to cmap, with final position being defined as a point that is at the center of the arena 
     #you can get map width and map weight from cmap.get_size()
     await robot.set_head_angle(cozmo.util.degrees(0)).wait_for_completed()
@@ -133,13 +139,15 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
 
     center_spot = Node((13 * 25.4, 9 * 25.4))
     cmap.add_goal(center_spot)
+    
     #reset the current stored paths in cmap
     #call the RRT function using your cmap as input, and RRT will update cmap with a new path to the target from the start position
     #get path from the cmap
     cmap.reset_paths()
     RRT(cmap, cmap.get_start())
     path = cmap.get_smooth_path()
-
+    print("smello")
+    
     #marked and update_cmap are both outputted from detect_cube_and_update_cmap(robot, marked, cozmo_pos).
     #and marked is an input to the function, indicating which cubes are already marked
     #So initialize "marked" to be an empty dictionary and "update_cmap" = False
@@ -158,9 +166,12 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
         #drive the robot to next node in path.
         ##First turn to the appropriate angle, and then move to it
         #you can calculate the angle to turn through a trigonometric function
+        print("shmi")
         curr_node = path[0]
         angle = math.degrees(0)
+
         if not cmap.is_solved():
+            print("1")
             if goal_c == None and len(cmap.get_goals()) == 0:
                 x_dist = (map_width / 2) - curr_node.x
                 y_dist = (map_height / 2) - curr_node.y
@@ -177,17 +188,22 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
                     end_pt = 1
 
         if cmap.is_solved():
+            print("2")
             if end_pt == len(path):
                 continue
             first = path[end_pt - 1]
             last = path[end_pt]
 
-            x_dist = last.x - first.x
-            y_dist = last.x - first.x
+            x_dist = abs(last.x - first.x)
+            print(f"x_dist: {x_dist}")
+            #y_dist = last.x - first.x
+            y_dist = abs(last.y - first.y)
+            print(f"y_dist: {y_dist}")
 
             angle = np.arctan2(y_dist, x_dist)
 
             dist = np.sqrt((x_dist) ** 2 + (y_dist) ** 2)
+            print("doing stuff...")
             await robot.turn_in_place(cozmo.util.Angle(angle)).wait_for_completed()
             await robot.drive_straight(cozmo.util.distance_mm(dist), cozmo.util.speed_mmps(30)).wait_for_completed()
 
@@ -211,6 +227,8 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
         #robot.pose.position.x = curr_node.x
         #robot.pose.position.y = curr_node.y
         #robot.angle = angle
+
+        
         # # Set new start position for replanning with RRT
         cmap.set_start(get_current_pose(robot))
         RRT(cmap, cmap.get_start())
@@ -223,7 +241,7 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
             cmap.reset()
             RRT(cmap, cmap.get_start())
             path = cmap.get_smooth_path()
-    
+        
     ########################################################################
     
 def get_current_pose(robot):
@@ -250,8 +268,10 @@ def get_global_node(local_angle, local_origin, node):
     #get trig values
     sin = math.sin(local_angle)
     cos = math.cos(local_angle)
-    y_val = node.y * sin + node.y * cos
-    x_val = node.x * cos - node.x * sin
+    #y_val = node.y * sin + node.y * cos
+    y_val = node.x * sin + node.y * cos
+    #x_val = node.x * cos - node.x * sin
+    x_val = node.x * cos - node.y * sin
     local_x = local_origin.x
     local_y = local_origin.y
     # declare new node
