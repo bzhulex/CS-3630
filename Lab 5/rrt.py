@@ -178,7 +178,7 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
             break
 
         (update_cmap, goal_c, mark) = await detect_cube_and_update_cmap(robot, marked,
-                                                                        (robot.pose.position.x, robot.pose.position.y))
+                                                                        Node((robot.pose.position.x, robot.pose.position.y)))
 
         print("starting to run through the path")
         curr_node = path[0]
@@ -186,32 +186,37 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
         # drive the robot to next node in path.
         # First turn to the appropriate angle, and then move to it
         # you can calculate the angle to turn through a trigonometric function
-        count = 0
+        count = 1
         for i in range(len(path)):
-            # if i == 0:
-            #     continue
+            if i == 0:
+                continue
             #reinitialze where you are on the map
             cmap.set_start(curr_node)
             dist_difference = ((path[i].x - curr_node.x), (path[i].y - curr_node.y))
             diff_angle = np.arctan2(dist_difference[1], dist_difference[0])
-            #print("curr angle ", curr_angle)
-            #print("diff_angle ", math.degrees(diff_angle))
-            angle_to_turn = coordinate_frame_convert(math.degrees(diff_angle), curr_angle)
-            #print("angle to turn ", angle_to_turn)
+
+            angle_to_turn = (math.degrees(diff_angle) -  curr_angle)
+
             await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
-            #print("curr angle and angle to turn addition ", curr_angle + angle_to_turn)
-            curr_angle = compute_angle(curr_angle + angle_to_turn)
+
+            curr_angle = curr_angle + angle_to_turn
+
+
             #print("curr angle after compute angle", curr_angle)
             (update_cmap, goal_c, _) = await detect_cube_and_update_cmap(robot, marked, curr_node)
+            #print("found cube or not ", update_cmap)
             #if we detected a cube, indicated by update_cmap, reset the cmap path, recalculate RRT, and get new paths
             if update_cmap:
                 print("cube detected, resetting path")
                 if not goal_c:
                     goal_center = True
-                angle_to_turn = coordinate_frame_convert(0, curr_angle)
-                await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+                angle_to_turn = 0 - curr_angle
+                await robot.turn_in_place(cozmo.util.degrees((0 - curr_angle))).wait_for_completed()
                 await robot.drive_straight(cozmo.util.distance_mm(0), cozmo.util.speed_mmps(0)).wait_for_completed()
-                curr_angle = compute_angle(curr_angle + angle_to_turn)
+                print("only addition ", curr_angle + angle_to_turn)
+                curr_angle = curr_angle + angle_to_turn
+                print("curr_angle ", curr_angle)
+
                 cmap.reset_paths()
                 cmap.set_start(curr_node)
                 RRT(cmap, cmap.get_start())
@@ -223,6 +228,7 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
             time.sleep(1)
             curr_node = path[i]
             count += 1
+            #print(count, len(path))
         if update_cmap:
             continue
 
@@ -231,6 +237,7 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
         if goal_reached:
             print("goal reached, end the while loop")
             break
+
         if count == (len(path)):
             print("went through whole path")
             break
@@ -331,17 +338,6 @@ def compute_angle(angle):
         angle = angle - 360
         return angle
     return angle
-
-
-def coordinate_frame_convert(angle1, angle2):
-    diff = angle1 - angle2
-    if diff <= -180:
-        while diff <= -180:
-            diff += 360
-    if diff > 180:
-        while diff > 180:
-            diff -= 360
-    return diff
 
 
 def get_current_pose(robot):
