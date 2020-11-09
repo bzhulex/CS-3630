@@ -9,8 +9,8 @@ from gui import *
 from utils import *
 
 MAX_NODES = 20000
-
-
+goal_center_found = False
+#BRIAN ZHU AND MIGUEL GARCIA
 def step_from_to(node0, node1, limit=75):
     ########################################################################
     # TODO: please enter your code below.
@@ -136,135 +136,106 @@ async def CozmoPlanning(robot: cozmo.robot.Robot):
     # Allows access to map and stopevent, which can be used to see if the GUI
     # has been closed by checking stopevent.is_set()
     global cmap, stopevent
-
     ########################################################################
     # TODO: please enter your code below.
     # Description of function provided in instructions. Potential pseudcode is below
 
     #assume start position is in cmap and was loaded from emptygrid.json as [50, 35] already
     #assume start angle is 0
-    
+
     #Add final position as goal point to cmap, with final position being defined as a point that is at the center of the arena 
     #you can get map width and map weight from cmap.get_size()
     await robot.set_head_angle(cozmo.util.degrees(0)).wait_for_completed()
+    await robot.set_lift_height(0).wait_for_completed()
     map_width, map_height = cmap.get_size()
 
     center_spot = Node((13 * 25.4, 9 * 25.4))
     cmap.add_goal(center_spot)
-    
+
     #reset the current stored paths in cmap
     #call the RRT function using your cmap as input, and RRT will update cmap with a new path to the target from the start position
-    #get path from the cmap
+
     cmap.reset_paths()
     RRT(cmap, cmap.get_start())
-    path = cmap.get_smooth_path()
-    print("smello")
-    
+    print("starting and getting inital path from RRT without any obstacles")
+
     #marked and update_cmap are both outputted from detect_cube_and_update_cmap(robot, marked, cozmo_pos).
     #and marked is an input to the function, indicating which cubes are already marked
     #So initialize "marked" to be an empty dictionary and "update_cmap" = False
     marked = dict()
-    updated_cmap = False
-    (updated_cmap, goal_c, mark) = await detect_cube_and_update_cmap(robot, marked, (robot.pose.position.x, robot.pose.position.y))
-    end_pt = 0
+    update_cmap = False
+
+    goal_center = False
+    curr_angle = 0
+
     #while the current cosmo position is not at the goal:
     while True:
+        # get path from the cmap
+        path = cmap.get_smooth_path()
 
         #break if path is none or empty, indicating no path was found
         if path is None or len(path) == 0:
             break
-        
-        #Get the next node from the path
-        #drive the robot to next node in path.
-        ##First turn to the appropriate angle, and then move to it
-        #you can calculate the angle to turn through a trigonometric function
-        print("shmi")
+
+        (update_cmap, goal_c, mark) = await detect_cube_and_update_cmap(robot, marked,
+                                                                        (robot.pose.position.x, robot.pose.position.y))
+
+        print("starting to run through the path")
         curr_node = path[0]
-        angle = math.degrees(0)
-
-        if not cmap.is_solved():
-            print("1")
-            if goal_c == None and len(cmap.get_goals()) == 0:
-                x_dist = (map_width / 2) - curr_node.x
-                y_dist = (map_height / 2) - curr_node.y
-                angle = np.arctan2(y_dist, x_dist)
-                dist = np.sqrt((x_dist) ** 2 + (y_dist) ** 2)
-                await robot.turn_in_place(cozmo.util.Angle(angle)).wait_for_completed()
-                await robot.drive_straight(cozmo.util.distance_mm(dist), cozmo.util.speed_mmps(30)).wait_for_completed()
-
-            if len(cmap.get_goals()) > 0:
-                cmap.set_start(get_current_pose(robot))
+        # Get the next node from the path
+        # drive the robot to next node in path.
+        # First turn to the appropriate angle, and then move to it
+        # you can calculate the angle to turn through a trigonometric function
+        count = 0
+        for i in range(len(path)):
+            # if i == 0:
+            #     continue
+            #reinitialze where you are on the map
+            cmap.set_start(curr_node)
+            dist_difference = ((path[i].x - curr_node.x), (path[i].y - curr_node.y))
+            diff_angle = np.arctan2(dist_difference[1], dist_difference[0])
+            #print("curr angle ", curr_angle)
+            #print("diff_angle ", math.degrees(diff_angle))
+            angle_to_turn = coordinate_frame_convert(math.degrees(diff_angle), curr_angle)
+            #print("angle to turn ", angle_to_turn)
+            await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+            #print("curr angle and angle to turn addition ", curr_angle + angle_to_turn)
+            curr_angle = compute_angle(curr_angle + angle_to_turn)
+            #print("curr angle after compute angle", curr_angle)
+            (update_cmap, goal_c, _) = await detect_cube_and_update_cmap(robot, marked, curr_node)
+            #if we detected a cube, indicated by update_cmap, reset the cmap path, recalculate RRT, and get new paths
+            if update_cmap:
+                print("cube detected, resetting path")
+                if not goal_c:
+                    goal_center = True
+                angle_to_turn = coordinate_frame_convert(0, curr_angle)
+                await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+                await robot.drive_straight(cozmo.util.distance_mm(0), cozmo.util.speed_mmps(0)).wait_for_completed()
+                curr_angle = compute_angle(curr_angle + angle_to_turn)
+                cmap.reset_paths()
+                cmap.set_start(curr_node)
                 RRT(cmap, cmap.get_start())
-                if cmap.is_solved():
-                    path = cmap.get_smooth_path()
-                    end_pt = 1
+                break
 
-        if cmap.is_solved():
-            print("2")
-            if end_pt == len(path):
-                print("finished!")
-                continue
-            first = path[end_pt - 1]
-            last = path[end_pt]
-
-            x_dist = abs(last.x - first.x)
-            print(f"x_dist: {x_dist}")
-            #y_dist = last.x - first.x
-            y_dist = abs(last.y - first.y)
-            print(f"y_dist: {y_dist}")
-
-            angle = np.arctan2(y_dist, x_dist)
-
-            dist = np.sqrt((x_dist) ** 2 + (y_dist) ** 2)
-            print("doing stuff...")
-            await robot.turn_in_place(cozmo.util.Angle(angle)).wait_for_completed()
+            dist = get_dist(path[i], curr_node)
             await robot.drive_straight(cozmo.util.distance_mm(dist), cozmo.util.speed_mmps(30)).wait_for_completed()
+            #put in a little extra sleep time after finishing to detect cubes
+            time.sleep(1)
+            curr_node = path[i]
+            count += 1
+        if update_cmap:
+            continue
 
-            end_pt += 1
+        goal_reached = goal_center
 
-        # for i in range(len(path)):
-        #     if i == 0:
-        #         continue
-        #     next_node = path[i]
-        #     x_dist = next_node.x - curr_node.x
-        #     y_dist = next_node.y - curr_node.y
-        #     angle = np.arctan2(y_dist, x_dist)
-        #
-        #     await robot.turn_in_place(math.degrees(angle)).wait_for_completed()
-        #
-        #     dist = get_dist(next_node, curr_node)
-        #
-        #     await robot.drive_straight(cozmo.util.distance_mm(dist), cozmo.util.speed_mmps(30)).wait_for_completed()
-
-        #Update the current Cozmo position (cozmo_pos and cozmo_angle) to be new node position and angle
-        #robot.pose.position.x = curr_node.x
-        #robot.pose.position.y = curr_node.y
-        #robot.angle = angle
-
-        
-        # # Set new start position for replanning with RRT
-        cmap.set_start(get_current_pose(robot))
-        RRT(cmap, cmap.get_start())
-        # #detect any visible obstacle cubes and update cmap
-        (updated_cmap, goal_c, mark) = await detect_cube_and_update_cmap(robot, marked,
-                                                                  (robot.pose.position.x, robot.pose.position.y))
-        # #if we detected a cube, indicated by update_cmap, reset the cmap path, recalculate RRT, and get new paths
-        if updated_cmap:
-            print("obstacle detected, resetting")
-            cmap.reset()
-            RRT(cmap, cmap.get_start())
-            path = cmap.get_smooth_path()
-        
+        if goal_reached:
+            print("goal reached, end the while loop")
+            break
+        if count == (len(path)):
+            print("went through whole path")
+            break
     ########################################################################
-    
-def get_current_pose(robot):
-    start_x, start_y = cmap.get_start()
-    curr_x = robot.pose.position.x
-    curr_y = robot.pose.position.y
 
-    return Node((start_x + curr_x, start_y + curr_y))
-    
-    
 def get_global_node(local_angle, local_origin, node):
     """Helper function: Transform the node's position (x,y) from local coordinate frame specified by local_origin and local_angle to global coordinate frame.
                         This function is used in detect_cube_and_update_cmap()
@@ -352,6 +323,34 @@ async def detect_cube_and_update_cmap(robot, marked, cozmo_pos):
     return update_cmap, goal_center, marked
 
 
+def compute_angle(angle):
+    if angle < 0:
+        angle = angle + 360
+        return angle
+    if angle > 360:
+        angle = angle - 360
+        return angle
+    return angle
+
+
+def coordinate_frame_convert(angle1, angle2):
+    diff = angle1 - angle2
+    if diff <= -180:
+        while diff <= -180:
+            diff += 360
+    if diff > 180:
+        while diff > 180:
+            diff -= 360
+    return diff
+
+
+def get_current_pose(robot):
+    start_x, start_y = cmap.get_start()
+    curr_x = robot.pose.position.x
+    curr_y = robot.pose.position.y
+
+    return Node((start_x + curr_x, start_y + curr_y))
+
 class RobotThread(threading.Thread):
     """Thread to run cozmo code separate from main thread
     """
@@ -379,7 +378,6 @@ class RRTThread(threading.Thread):
             cmap.reset_paths()
         stopevent.set()
 
-
 if __name__ == '__main__':
     global cmap, stopevent
     stopevent = threading.Event()
@@ -395,7 +393,7 @@ if __name__ == '__main__':
         robot_thread = RobotThread()
         robot_thread.start()
     else:
-        cmap = CozMap("maps/map3.json", node_generator)
+        cmap = CozMap("maps/map2.json", node_generator)
         sim = RRTThread()
         sim.start()
     visualizer = Visualizer(cmap)

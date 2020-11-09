@@ -4,7 +4,7 @@ import random
 
 from utils import *
 import rrt
-
+#BRIAN ZHU AND MIGUEL GARCIA
 class CozMap:
     """Class representing a map for search algorithms.
 
