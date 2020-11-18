@@ -219,6 +219,20 @@ async def run(robot: cozmo.robot.Robot):
 
         return curr_angle
 
+    # Start by localizing self and going to pickup zone
+    curr_angle = startup()
+
+    # Then run the pickup-deliver-return_to_pickup loop
+    while True:
+        print("picking up...")
+        curr_angle = pickup()
+        time.sleep(500)
+        print("deliverying...")
+        curr_angle = deliver()
+        time.sleep(500)
+        print("returning to pickup...")
+        curr_angle = return_to_pickup()
+        time.sleep(500)
 
     return
 
