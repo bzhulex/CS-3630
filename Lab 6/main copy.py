@@ -191,7 +191,6 @@ async def run_pf(robot: cozmo.robot.Robot):
         if arrived_to_goal and not robot.is_picked_up:
             await robot.drive_wheels(0.0, 0, 0)
 
-        '''
         # kidnapped
         if robot.is_picked_up:
             picked_up_flag = False
@@ -206,8 +205,8 @@ async def run_pf(robot: cozmo.robot.Robot):
 
             prev_pose = cozmo.util.Pose(0, 0, 0, angle_z=cozmo.util.Angle(degrees=0))
             pf.particles = Particle.create_random(PARTICLE_COUNT, grid)
+
             continue
-        '''
 
         # INFORMATION UPDATE
         curr_pose = robot.pose
@@ -217,10 +216,10 @@ async def run_pf(robot: cozmo.robot.Robot):
         # PF
         (mean_x, mean_y, mean_h, mean_confidence) = pf.update(odom, marker_list)
 
-        #gui.show_particles(pf.particles)
-        #gui.show_mean(mean_x, mean_y, mean_h)
-        #gui.show_camera_image(annotated_image)
-        #gui.updated.set()
+        gui.show_particles(pf.particles)
+        gui.show_mean(mean_x, mean_y, mean_h)
+        gui.show_camera_image(annotated_image)
+        gui.updated.set()
 
         if mean_confidence:
             converged_score += 2.5
@@ -231,7 +230,7 @@ async def run_pf(robot: cozmo.robot.Robot):
 
         # if pf converged but then diverged again
         if has_converged and not mean_confidence:
-            converged_score -= 1.0
+            converged_score -= 1.5
 
         # if the pf diverges a lot, then reset
         if converged_score < 0:
@@ -240,8 +239,7 @@ async def run_pf(robot: cozmo.robot.Robot):
 
         temp_score = 1 + converged_score / 10
         #print("start drive wheel")
-        turn_speed = 20#12
-        await robot.drive_wheels(20.0 / temp_score, -20.0 / temp_score)
+        await robot.drive_wheels(12.0 / temp_score, -12.0 / temp_score)
 
         if has_converged:
             await robot.drive_wheels(0.0, 0, 0)
@@ -283,10 +281,8 @@ async def run_pf(robot: cozmo.robot.Robot):
                 await robot.drive_wheels(0.0, 0, 0)
         #print("end of pf loop")
     ###################
-    '''
-async def go_to_zone(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, first):
-
     
+async def go_to_zone(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, first):
     global cmap, stopevent
     # Clear old goal
     cmap.clear_goals()
@@ -354,69 +350,8 @@ async def go_to_zone(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, f
             cmap.set_start(curr_node)
             print("went through whole path")
             break
-    
+
     return curr_angle_temp # keep track of this globally
-'''
-
-async def go_to_storage(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, first):
-    '''hardcode that we are inside of pickup zone'''
-
-    # want to turn so are facing directly south
-    diff_angle = 0/180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
-    
-    # now go straight down for some hardcoded distance
-    await robot.drive_wheels(15.0, 15, 0, duration=6.0)
-
-    # want to turn so are facing directly east
-    diff_angle = 180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
-
-    # now go straight right for some hardcoded distance
-    await robot.drive_wheels(15.0, 15, 0, duration=6.0)
-
-    # want to turn so are facing directly norht
-    diff_angle = 90/180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
-
-    # now go straight for some hardcoded distance
-    await robot.drive_wheels(15.0, 15, 0, duration=6.0)
-
-    # please be in storage
-    return curr_angle_temp
-
-async def go_to_pickup(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, first):
-    '''hardcode that we are inside of pickup zone'''
-
-    # want to turn so are facing directly south
-    diff_angle = 0/180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
-    
-    # now go straight down for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
-
-    # want to turn so are facing directly west
-    diff_angle = -180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
-
-    # now go straight right for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
-
-    # want to turn so are facing directly norht
-    diff_angle = 90/180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
-
-    # now go straight for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
-
-    # please be in storage
-    return curr_angle_temp
 
 async def run(robot: cozmo.robot.Robot):
     global cmap, stopevent
@@ -518,7 +453,7 @@ async def run(robot: cozmo.robot.Robot):
         '''
         # Go to storage zone
         print("starting delivery")
-        curr_angle_temp = await go_to_storage(robot, curr_angle, storage_zone, fragile_zone, first)
+        curr_angle_temp = await go_to_zone(robot, curr_angle, storage_zone, fragile_zone, first)
         
         # Drop off cube.
         await robot.place_object_on_ground_here(cube).wait_for_completed()
@@ -534,9 +469,7 @@ async def run(robot: cozmo.robot.Robot):
         '''
 
         # Go to pickup.
-        print("getting ready to return")
-        curr_angle_temp = await go_to_pickup(robot, curr_angle, pickup_zone, fragile_zone, False)
-        #curr_angle_temp = await go_to_zone(robot, curr_angle, pickup_zone, fragile_zone, False)
+        curr_angle_temp = await go_to_zone(robot, curr_angle, pickup_zone, fragile_zone, False)
 
         return curr_angle_temp
 
