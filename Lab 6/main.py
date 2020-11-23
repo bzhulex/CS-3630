@@ -20,7 +20,7 @@ from particle import Particle, Robot
 from setting import *
 from particle_filter import *
 from utils import *
-from cozmo.util import degrees, distance_mm, speed_mmps, Pose, Angle
+from cozmo.util import degrees, distance_mm, speed_mmps, Pose, Angle, distance_inches
 import math
 
 ############ LAB 4 IMPORTS #################
@@ -392,23 +392,23 @@ async def go_to_pickup(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle,
     '''hardcode that we are inside of pickup zone'''
 
     # want to turn so are facing directly south
-    diff_angle = 0/180 * 3.14159
+    diff_angle = 135/180 * 3.14159 # some angle
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
     await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
     
     # now go straight down for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
+    await robot.drive_straight(distance_inches(10), speed_mmps(60)).wait_for_completed()
 
     # want to turn so are facing directly west
-    diff_angle = -180 * 3.14159
+    diff_angle = 120/180 * 3.14159
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
     await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
 
     # now go straight right for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
+    robot.drive_straight(distance_inches(11), speed_mmps(60)).wait_for_completed()
 
     # want to turn so are facing directly norht
-    diff_angle = 90/180 * 3.14159
+    diff_angle = -90/180 * 3.14159
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
     await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
 
@@ -541,7 +541,7 @@ async def run(robot: cozmo.robot.Robot):
         return curr_angle_temp
 
     # Start by localizing self and going to pickup zone
-    await startup()
+    #await startup()
 
     # Then run the pickup-deliver-return_to_pickup loop
     count = 0
