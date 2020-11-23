@@ -76,7 +76,7 @@ It will first have to localize itself, then proceed to the pickup zone.
 Once in the pickup zone, the robot must indicate through an audio cue that it is ready to begin delivery. 
 From that point on, a cube will be placed within the pickup area for the robot to deliver.
 '''
-global cmap, stopevent, curr_angle
+global cmap, stopevent
 #map_width, map_height = cmap.get_size()
 
 
@@ -154,7 +154,7 @@ async def run_pf(robot: cozmo.robot.Robot):
     global picked_up_flag, prev_pose, curr_angle
     global grid, gui, pf
 
-    goal = (1.0,  11.75, 0)
+    goal = (1.5,  11.75, 0)
     # start streaming
     robot.camera.image_stream_enabled = True
     robot.camera.color_image_enabled = False
@@ -262,7 +262,7 @@ async def run_pf(robot: cozmo.robot.Robot):
             await robot.turn_in_place(degrees(int(zero_degree * 0.975))).wait_for_completed()
             # be happy!
             await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabHappy).wait_for_completed()
-
+            print("pose after finishing pf ", robot.pose)
             arrived_to_goal = True
             return
         else:
@@ -280,11 +280,15 @@ async def run_pf(robot: cozmo.robot.Robot):
         #print("end of pf loop")
     ###################
 
-async def go_to_zone(robot: cozmo.robot.Robot, zone, obstacle):
-    global cmap, stopevent, curr_angle
+async def go_to_zone(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, first):
+    global cmap, stopevent
     # Clear old goal
     cmap.clear_goals()
 
+    print("x pos ", robot.pose.position.x)
+    print("y pos ", robot.pose.position.y)
+    if first:
+        cmap.set_start(Node((2.5 * 25.4, 11.75 * 25.4)))
     # If obstacle (i.e. every run except for the first one), make sure Fragile Zone is in cmap
     if len(obstacle) > 1:
         # This is ugly, but obstacle has a length of 1 if "None". Else its a list. Could also check if list but doesn't matter i dont think
@@ -321,14 +325,11 @@ async def go_to_zone(robot: cozmo.robot.Robot, zone, obstacle):
             # compute turn
             dist_difference = ((path[i].x - curr_node.x), (path[i].y - curr_node.y))
             diff_angle = np.arctan2(dist_difference[1], dist_difference[0])
-            print(curr_angle)
-            print(type(curr_angle))
-            print(math.degrees(curr_angle))
-            angle_to_turn = (math.degrees(diff_angle) -  curr_angle)
+            angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
             await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
 
             # update curr_angle
-            curr_angle = curr_angle + angle_to_turn
+            curr_angle_temp = curr_angle_temp + angle_to_turn
 
             #print("curr angle after compute angle", curr_angle)
             dist = get_dist(path[i], curr_node)
@@ -344,13 +345,14 @@ async def go_to_zone(robot: cozmo.robot.Robot, zone, obstacle):
         #     break
 
         if count == (len(path)):
+            cmap.set_start(curr_node)
             print("went through whole path")
             break
 
-    return curr_angle # keep track of this globally
+    return curr_angle_temp # keep track of this globally
 
 async def run(robot: cozmo.robot.Robot):
-    global cmap, stopevent, curr_angle
+    global cmap, stopevent
     '''
     Main driver code function.
     Consists of 2 sections:
@@ -371,7 +373,7 @@ async def run(robot: cozmo.robot.Robot):
 
     # hard-code zones as goals
     pickup_zone = Node((4.25 * 25.4, 10.5 * 25.4)) # pickup zone is 8.5 x 8.5", top left corner, so just hardcode ~middle
-    storage_zone = Node((21.75 * 25.4, 10.5 * 25.4)) # pickup zone is 8.5 x 8.5", top right corner, so just hardcode ~middle
+    storage_zone = Node((18.5 * 25.4, 8.5 * 25.4)) # pickup zone is 8.5 x 8.5", top right corner, so just hardcode ~middle
     
     # fragile zone we actually need to indicate the four corners as nodes
     # fragile_corner1 = Node((11.5 * 25.4, 6 * 25.4))
@@ -419,7 +421,7 @@ async def run(robot: cozmo.robot.Robot):
 
         return curr_angle
 
-    async def pickup():
+    async def pickup(curr_angle_temp):
         global cmap, stopevent
         '''
         Detect & pickup cube.
@@ -429,21 +431,7 @@ async def run(robot: cozmo.robot.Robot):
         print("starting pickup")
         await robot.set_head_angle(cozmo.util.degrees(-20)).wait_for_completed()
         await robot.set_lift_height(0).wait_for_completed()
-        # time.sleep(1.5)
-        # look_around = robot.start_behavior(cozmo.behavior.BehaviorTypes.LookAroundInPlace).wait_for_completed()
-        # try:
-        #     cube = robot.world.wait_for_observed_light_cube(timeout=30)
-        #     print("Found cube: %s" % cube)
-        # except asyncio.TimeoutError:
-        #     print("Didn't find a cube")
-        # finally:
-        #     # whether we find it or not, we want to stop the behavior
-        #     look_around.stop()
-        #
-        # if cube:
-        #     robot.stop_all_motors()
-        #     action = robot.pickup_object(cube, num_retries=3)
-        #     await action.wait_for_completed()
+
         print("Cozmo is waiting until he sees a cube.")
 
         cube = await robot.world.wait_for_observed_light_cube()
@@ -452,24 +440,25 @@ async def run(robot: cozmo.robot.Robot):
         action = robot.pickup_object(cube, num_retries=3)
         await action.wait_for_completed()
         print("result:", action.result)
-        curr_angle = robot.pose_angle.degrees
+        curr_angle_temp = robot.pose_angle.degrees
 
-        return curr_angle
-    async def deliver(curr_angle):
+        return curr_angle_temp, cube
+
+    async def deliver(curr_angle_temp, cube, first):
         global cmap, stopevent
         '''
         Robot navigates to the storage zone, avoiding the fragile zone.
         '''
         # Go to storage zone
         print("starting delivery")
-        curr_angle = await go_to_zone(robot, storage_zone, fragile_zone)
+        curr_angle_temp = await go_to_zone(robot, curr_angle, storage_zone, fragile_zone, first)
         
         # Drop off cube.
-        await robot.place_object_on_ground_here()
+        await robot.place_object_on_ground_here(cube).wait_for_completed()
 
-        return curr_angle
+        return curr_angle_temp
 
-    async def return_to_pickup(curr_angle):
+    async def return_to_pickup(curr_angle_temp):
         global cmap, stopevent
         '''
         Robot clears goals and resets paths.
@@ -478,29 +467,35 @@ async def run(robot: cozmo.robot.Robot):
         '''
 
         # Go to pickup.
-        curr_angle = await go_to_zone(robot, pickup_zone, fragile_zone)
+        curr_angle_temp = await go_to_zone(robot, curr_angle, pickup_zone, fragile_zone, False)
 
-        return curr_angle
+        return curr_angle_temp
 
     # Start by localizing self and going to pickup zone
     await startup()
 
     # Then run the pickup-deliver-return_to_pickup loop
+    count = 0
     while True:
         print("curr_angle at start ", curr_angle)
         print("picking up...")
-        curr_angle = await pickup()
+        curr_angle, cube = await pickup(curr_angle)
         time.sleep(1.5)
         print("curr_angle after pickup ", curr_angle)
         print("delivering...")
-        curr_angle = await deliver()
+        if count == 0:
+            curr_angle = await deliver(curr_angle, cube, True)
+        else:
+            curr_angle = await deliver(curr_angle, cube, False)
         time.sleep(1.5)
         print("curr_angle after delivery ", curr_angle)
         print("returning to pickup...")
-        curr_angle = await return_to_pickup()
+        curr_angle = await return_to_pickup(curr_angle)
         time.sleep(1.5)
         print("curr_angle after return to pickup ", curr_angle)
-
+        #print("re run pf")
+        #await run_pf(robot)
+        #first = True
 
     return
 
@@ -521,12 +516,17 @@ class CozmoThread(threading.Thread):
 if __name__ == '__main__':
 
     # cozmo thread
-    global cmap, stopevent, curr_angle
+    global cmap, stopevent
     cmap = CozMap("maps/emptygrid.json", node_generator)
     cozmo_thread = CozmoThread()
     cozmo_thread.start()
 
-    # init
+    #init
+    visualizer = Visualizer(cmap)
+    visualizer.start()
+    stopevent.set()
+
     gui.show_particles(pf.particles)
     gui.show_mean(0, 0, 0)
     gui.start()
+

@@ -114,8 +114,11 @@ class CozMap:
             Arguments:
             node -- grid coordinates of start cell
         """
-        if self.is_inside_obstacles(node) or (not self.is_inbound(node)):
-            print("start is not updated since your start is not legitimate\nplease try another one\n")
+        if self.is_inside_obstacles(node):
+            print("start is not updated since your start is inside obstacle\nplease try another one\n")
+            return
+        if not self.is_inbound(node):
+            print("start is not updated since your start is out of bounds\nplease try another one\n")
             return
         self.lock.acquire()
         self._start = Node((node.x, node.y))
