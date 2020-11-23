@@ -409,8 +409,8 @@ async def go_to_pickup(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle)
     #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
     await robot.turn_in_place(cozmo.util.degrees(-85)).wait_for_completed()
 
-    # now go straight left for some hardcoded distance
-    await robot.drive_straight(distance_inches(17.5), speed_mmps(40)).wait_for_completed()
+    # now go straight right for some hardcoded distance
+    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
 
     # want to turn so are facing directly norht
     diff_angle = 90/180 * 3.14159
