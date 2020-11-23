@@ -20,7 +20,7 @@ from particle import Particle, Robot
 from setting import *
 from particle_filter import *
 from utils import *
-from cozmo.util import degrees, distance_mm, speed_mmps, Pose, Angle
+from cozmo.util import degrees, distance_mm, speed_mmps, Pose, Angle, distance_inches
 import math
 
 ############ LAB 4 IMPORTS #################
@@ -358,63 +358,70 @@ async def go_to_zone(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, f
     return curr_angle_temp # keep track of this globally
 '''
 
-async def go_to_storage(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, first):
+async def go_to_storage(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle):
     '''hardcode that we are inside of pickup zone'''
 
     # want to turn so are facing directly south
     diff_angle = 0/180 * 3.14159
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    await robot.turn_in_place(cozmo.util.degrees(-85)).wait_for_completed()
     
     # now go straight down for some hardcoded distance
-    await robot.drive_wheels(15.0, 15, 0, duration=6.0)
+    await robot.drive_straight(distance_mm(8.25 * 25.4), speed_mmps(50)).wait_for_completed()
 
     # want to turn so are facing directly east
     diff_angle = 180 * 3.14159
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    await robot.turn_in_place(cozmo.util.degrees(90)).wait_for_completed()
 
     # now go straight right for some hardcoded distance
-    await robot.drive_wheels(15.0, 15, 0, duration=6.0)
+    await robot.drive_straight(distance_mm(15 * 25.4), speed_mmps(50)).wait_for_completed()
 
-    # want to turn so are facing directly norht
+    # want to turn so are facing directly north
     diff_angle = 90/180 * 3.14159
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    await robot.turn_in_place(cozmo.util.degrees(90)).wait_for_completed()
 
     # now go straight for some hardcoded distance
-    await robot.drive_wheels(15.0, 15, 0, duration=6.0)
+    await robot.drive_straight(distance_mm(10 * 25.4), speed_mmps(50)).wait_for_completed()
 
     # please be in storage
     return curr_angle_temp
 
-async def go_to_pickup(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, first):
+async def go_to_pickup(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle):
     '''hardcode that we are inside of pickup zone'''
 
     # want to turn so are facing directly south
     diff_angle = 0/180 * 3.14159
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
-    
+    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    await robot.turn_in_place(cozmo.util.degrees(180)).wait_for_completed()
+
     # now go straight down for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
+    await  robot.drive_straight(distance_inches(8), speed_mmps(50)).wait_for_completed()
 
     # want to turn so are facing directly west
     diff_angle = -180 * 3.14159
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    await robot.turn_in_place(cozmo.util.degrees(-85)).wait_for_completed()
 
-    # now go straight right for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
+    # now go straight left for some hardcoded distance
+    await robot.drive_straight(distance_inches(17.5), speed_mmps(40)).wait_for_completed()
 
     # want to turn so are facing directly norht
     diff_angle = 90/180 * 3.14159
     angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    await robot.turn_in_place(cozmo.util.degrees(-90)).wait_for_completed()
 
     # now go straight for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
+    await robot.drive_straight(distance_inches(9), speed_mmps(40)).wait_for_completed()
 
+    await robot.turn_in_place(cozmo.util.degrees(-90)).wait_for_completed()
     # please be in storage
     return curr_angle_temp
 
@@ -511,14 +518,14 @@ async def run(robot: cozmo.robot.Robot):
 
         return curr_angle_temp, cube
 
-    async def deliver(curr_angle_temp, cube, first):
+    async def deliver(curr_angle_temp, cube):
         global cmap, stopevent
         '''
         Robot navigates to the storage zone, avoiding the fragile zone.
         '''
         # Go to storage zone
         print("starting delivery")
-        curr_angle_temp = await go_to_storage(robot, curr_angle, storage_zone, fragile_zone, first)
+        curr_angle_temp = await go_to_storage(robot, curr_angle, storage_zone, fragile_zone)
         
         # Drop off cube.
         await robot.place_object_on_ground_here(cube).wait_for_completed()
@@ -535,7 +542,7 @@ async def run(robot: cozmo.robot.Robot):
 
         # Go to pickup.
         print("getting ready to return")
-        curr_angle_temp = await go_to_pickup(robot, curr_angle, pickup_zone, fragile_zone, False)
+        curr_angle_temp = await go_to_pickup(robot, curr_angle, pickup_zone, fragile_zone)
         #curr_angle_temp = await go_to_zone(robot, curr_angle, pickup_zone, fragile_zone, False)
 
         return curr_angle_temp
@@ -552,10 +559,11 @@ async def run(robot: cozmo.robot.Robot):
         time.sleep(1.5)
         print("curr_angle after pickup ", curr_angle)
         print("delivering...")
-        if count == 0:
-            curr_angle = await deliver(curr_angle, cube, True)
-        else:
-            curr_angle = await deliver(curr_angle, cube, False)
+        curr_angle = await deliver(curr_angle, cube)
+        # if count == 0:
+        #     curr_angle = await deliver(curr_angle, cube, True)
+        # else:
+        #     curr_angle = await deliver(curr_angle, cube, False)
         time.sleep(1.5)
         print("curr_angle after delivery ", curr_angle)
         print("returning to pickup...")
@@ -591,9 +599,9 @@ if __name__ == '__main__':
     cozmo_thread.start()
 
     #init
-    visualizer = Visualizer(cmap)
-    visualizer.start()
-    stopevent.set()
+    # visualizer = Visualizer(cmap)
+    # visualizer.start()
+    # stopevent.set()
 
     gui.show_particles(pf.particles)
     gui.show_mean(0, 0, 0)
