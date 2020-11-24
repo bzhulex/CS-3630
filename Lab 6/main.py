@@ -223,7 +223,7 @@ async def run_pf(robot: cozmo.robot.Robot):
         #gui.updated.set()
 
         if mean_confidence:
-            converged_score += 2.5
+            converged_score += 2.75
 
         # converged and confident of it
         if converged_score >= 10:
@@ -231,7 +231,7 @@ async def run_pf(robot: cozmo.robot.Robot):
 
         # if pf converged but then diverged again
         if has_converged and not mean_confidence:
-            converged_score -= 1.0
+            converged_score -= 1.25
 
         # if the pf diverges a lot, then reset
         if converged_score < 0:
@@ -240,9 +240,9 @@ async def run_pf(robot: cozmo.robot.Robot):
 
         temp_score = 1 + converged_score / 10
         #print("start drive wheel")
-        turn_speed = 20#12
-        await robot.drive_wheels(20.0 / temp_score, -20.0 / temp_score)
-
+        turn_speed = 16.0#12
+        await robot.drive_wheels(turn_speed / temp_score, -turn_speed / temp_score)
+        print("converged score:",converged_score)
         if has_converged:
             await robot.drive_wheels(0.0, 0, 0)
             goal_x = goal[0]
@@ -265,20 +265,20 @@ async def run_pf(robot: cozmo.robot.Robot):
             # turn to zero degrees
             await robot.turn_in_place(degrees(int(zero_degree * 0.975))).wait_for_completed()
             # be happy!
-            await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabHappy).wait_for_completed()
+            #await robot.play_anim_trigger(cozmo.anim.Triggers.CodeLabHappy).wait_for_completed()
             print("pose after finishing pf ", robot.pose)
             arrived_to_goal = True
             return
         else:
             # if there is no convergence, keep turning in place
             if ((time.time() - start_time) // 1) % 8 < 3 or len(marker_list) <= 0:
-                await robot.drive_wheels(12.0, -12, 0)
+                await robot.drive_wheels(turn_speed, -turn_speed, 0)
             elif len(marker_list) > 0:
                 markers_loc = marker_list[0][0]
-                if markers_loc > 12:
-                    await robot.drive_wheels(15.0, 15, 0)
-                if markers_loc < 8:
-                    await robot.drive_wheels(-15.0, -15, 0)
+                if markers_loc > 13:
+                    await robot.drive_wheels(turn_speed+2, turn_speed+2, 0)
+                if markers_loc < 5:
+                    await robot.drive_wheels(-turn_speed - 2.0, -turn_speed -2 , 0)
             else:
                 await robot.drive_wheels(0.0, 0, 0)
         #print("end of pf loop")
@@ -358,71 +358,54 @@ async def go_to_zone(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, f
     return curr_angle_temp # keep track of this globally
 '''
 
-async def go_to_storage(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle):
+async def go_to_storage(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, count):
     '''hardcode that we are inside of pickup zone'''
 
     # want to turn so are facing directly south
-    diff_angle = 0/180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
     await robot.turn_in_place(cozmo.util.degrees(-85)).wait_for_completed()
     
     # now go straight down for some hardcoded distance
-    await robot.drive_straight(distance_mm(8.25 * 25.4), speed_mmps(50)).wait_for_completed()
+    await robot.drive_straight(distance_mm(11.25 * 25.4), speed_mmps(120)).wait_for_completed()
 
     # want to turn so are facing directly east
     diff_angle = 180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
     await robot.turn_in_place(cozmo.util.degrees(90)).wait_for_completed()
 
     # now go straight right for some hardcoded distance
-    await robot.drive_straight(distance_mm(15 * 25.4), speed_mmps(50)).wait_for_completed()
+    await robot.drive_straight(distance_mm(15 * 25.4), speed_mmps(120)).wait_for_completed()
 
     # want to turn so are facing directly north
-    diff_angle = 90/180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
     await robot.turn_in_place(cozmo.util.degrees(90)).wait_for_completed()
 
     # now go straight for some hardcoded distance
-    await robot.drive_straight(distance_mm(10 * 25.4), speed_mmps(50)).wait_for_completed()
+    await robot.drive_straight(distance_mm(10 * 25.4 + 2*count), speed_mmps(120)).wait_for_completed()
 
     # please be in storage
     return curr_angle_temp
 
-async def go_to_pickup(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle):
+async def go_to_pickup(robot: cozmo.robot.Robot,curr_angle_temp, zone, obstacle, count):
     '''hardcode that we are inside of pickup zone'''
 
     # want to turn so are facing directly south
-    diff_angle = 0/180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
     await robot.turn_in_place(cozmo.util.degrees(180)).wait_for_completed()
 
     # now go straight down for some hardcoded distance
-    await  robot.drive_straight(distance_inches(8), speed_mmps(50)).wait_for_completed()
+    await  robot.drive_straight(distance_mm(9.5 * 25.4), speed_mmps(120)).wait_for_completed()
 
     # want to turn so are facing directly west
-    diff_angle = -180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
     await robot.turn_in_place(cozmo.util.degrees(-85)).wait_for_completed()
 
-    # now go straight right for some hardcoded distance
-    robot.drive_straight(distance_inches(8), speed_mmps(40)).wait_for_completed()
+    # now go LEFT for some hardcoded distance
+    await robot.drive_straight(distance_mm(16*25.4 + 2*count), speed_mmps(120)).wait_for_completed()
 
-    # want to turn so are facing directly norht
-    diff_angle = 90/180 * 3.14159
-    angle_to_turn = (math.degrees(diff_angle) -  curr_angle_temp)
-    #await robot.turn_in_place(cozmo.util.degrees(angle_to_turn)).wait_for_completed()
+    # want to turn so are facing directly north
     await robot.turn_in_place(cozmo.util.degrees(-90)).wait_for_completed()
 
     # now go straight for some hardcoded distance
-    await robot.drive_straight(distance_inches(9), speed_mmps(40)).wait_for_completed()
+    await robot.drive_straight(distance_mm(10*25.4 + 2*count), speed_mmps(120)).wait_for_completed()
 
     await robot.turn_in_place(cozmo.util.degrees(-90)).wait_for_completed()
-    # please be in storage
+
     return curr_angle_temp
 
 async def run(robot: cozmo.robot.Robot):
@@ -446,7 +429,7 @@ async def run(robot: cozmo.robot.Robot):
     await robot.set_lift_height(0).wait_for_completed()
 
     # hard-code zones as goals
-    pickup_zone = Node((4.25 * 25.4, 10.5 * 25.4)) # pickup zone is 8.5 x 8.5", top left corner, so just hardcode ~middle
+    pickup_zone = Node((3.25 * 25.4, 10.25 * 25.4)) # pickup zone is 8.5 x 8.5", top left corner, so just hardcode ~middle
     storage_zone = Node((18.5 * 25.4, 8.5 * 25.4)) # pickup zone is 8.5 x 8.5", top right corner, so just hardcode ~middle
     
     # fragile zone we actually need to indicate the four corners as nodes
@@ -518,21 +501,21 @@ async def run(robot: cozmo.robot.Robot):
 
         return curr_angle_temp, cube
 
-    async def deliver(curr_angle_temp, cube):
+    async def deliver(curr_angle_temp, cube,count):
         global cmap, stopevent
         '''
         Robot navigates to the storage zone, avoiding the fragile zone.
         '''
         # Go to storage zone
         print("starting delivery")
-        curr_angle_temp = await go_to_storage(robot, curr_angle, storage_zone, fragile_zone)
+        curr_angle_temp = await go_to_storage(robot, curr_angle, storage_zone, fragile_zone, count)
         
         # Drop off cube.
         await robot.place_object_on_ground_here(cube).wait_for_completed()
 
         return curr_angle_temp
 
-    async def return_to_pickup(curr_angle_temp):
+    async def return_to_pickup(curr_angle_temp, count):
         global cmap, stopevent
         '''
         Robot clears goals and resets paths.
@@ -542,7 +525,7 @@ async def run(robot: cozmo.robot.Robot):
 
         # Go to pickup.
         print("getting ready to return")
-        curr_angle_temp = await go_to_pickup(robot, curr_angle, pickup_zone, fragile_zone)
+        curr_angle_temp = await go_to_pickup(robot, curr_angle, pickup_zone, fragile_zone, count)
         #curr_angle_temp = await go_to_zone(robot, curr_angle, pickup_zone, fragile_zone, False)
 
         return curr_angle_temp
@@ -559,7 +542,7 @@ async def run(robot: cozmo.robot.Robot):
         time.sleep(1.5)
         print("curr_angle after pickup ", curr_angle)
         print("delivering...")
-        curr_angle = await deliver(curr_angle, cube)
+        curr_angle = await deliver(curr_angle, cube, count)
         # if count == 0:
         #     curr_angle = await deliver(curr_angle, cube, True)
         # else:
@@ -567,7 +550,8 @@ async def run(robot: cozmo.robot.Robot):
         time.sleep(1.5)
         print("curr_angle after delivery ", curr_angle)
         print("returning to pickup...")
-        curr_angle = await return_to_pickup(curr_angle)
+        count+=1
+        curr_angle = await return_to_pickup(curr_angle, count)
         time.sleep(1.5)
         print("curr_angle after return to pickup ", curr_angle)
         #print("re run pf")
